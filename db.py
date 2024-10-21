@@ -10,6 +10,7 @@ DB_PATH = os.getenv('DB_PATH')
 # Initialize sqlite client
 def database_init():
     con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
     
     con.enable_load_extension(True)
     sqlite_vec.load(con)
@@ -18,12 +19,15 @@ def database_init():
         "select sqlite_version(), vec_version()"
     ).fetchone()
     print(
+        f'\n###########################################\n',
         f"sqlite_version={sqlite_version}, vec_version={vec_version}",
         f'\n###########################################\n',
         sep='\n'
     )
+
+    return con, cur
     
-    cur = con.cursor()
+def database_vec_create():
     cur.execute("""
         CREATE VIRTUAL TABLE VECS
         USING vec0(
@@ -31,6 +35,8 @@ def database_init():
             EMBEDDING FLOAT[1024] DISTANCE_METRIC = COSINE
         );
     """)
+
+def database_tweets_create():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS 
         TWEETS (
@@ -40,8 +46,6 @@ def database_init():
             MEDIA_URL_HTTPSS_STR TEXT
         );
     """)
-
-    return con, cur
 
 # Insert data into sqlite client
 def database_insert_tweet(con, cur, data):
@@ -76,3 +80,10 @@ def database_update_tweet(con, cur, tweet_id, vec_val):
         (vec_val, tweet_id)
     )
     con.commit()
+
+# Select data into sqlite client
+def database_select_tweet(cur):
+    cur.execute('''SELECT * FROM TWEETS''')
+    output = cur.fetchall()
+    
+    return output

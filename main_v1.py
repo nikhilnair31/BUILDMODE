@@ -4,18 +4,17 @@ import numpy as np
 from dotenv import load_dotenv
 from helper import serialize_f32
 from twit import tweet_login, tweet_user, get_user_tweets
-from db import database_init, database_insert_tweet, database_update_tweet
+from db import database_init, database_insert_tweet, database_insert_vec, database_select_tweet
 from api import replicate_init, replicate_embedding
 
 def set_embdedding(replicate_client, con, cur):
-    cur.execute('''SELECT * FROM tweets''') 
-    output = cur.fetchall()
+    output = database_select_tweet(cur)
 
     for row in output: 
         embedding_vec = []
         input_dict = {}
 
-        tweet_id, tweet_date, tweet_text, tweet_media, _ = row
+        tweet_id, tweet_date, tweet_text, tweet_media = row
         print(
             f'tweet_id: {tweet_id}',
             f'tweet_date: {tweet_date}',
@@ -34,24 +33,25 @@ def set_embdedding(replicate_client, con, cur):
                 input_dict = {"modality": "vision", "input": media}
                 vec = replicate_embedding(replicate_client, input_dict)
                 embedding_vec.append(vec)
-        print(f'embedding_vec shape: {embedding_vec.shape}')
+        print(f'embedding_vec shape: {np.shape(embedding_vec)}')
         
         # Handle averaging if there are multiple vectors (e.g., multiple media files)
         if isinstance(embedding_vec[0], list):
             embedding_vec_avg = np.average(np.array(embedding_vec), axis=0)
         else:
             embedding_vec_avg = embedding_vec
-        print(f'embedding_vec_avg shape: {embedding_vec_avg.shape}')
+        print(f'embedding_vec_avg shape: {np.shape(embedding_vec_avg)}')
         
         embedding_vec_ser = serialize_f32(embedding_vec_avg)
-        print(f'embedding_vec_ser shape: {embedding_vec_ser.shape}\n')
         
         # Insert data into the database
-        database_insert_vec(con = con, cur = cur, tweet_id = tweet_id, vec_val = embedding_vec_ser)
+        database_insert_vec(con = con, cur = cur, data = (tweet_id, embedding_vec_ser))
 
 async def main():
     # Initialize the database
     con, cur = database_init()
+    database_vec_create()
+    database_tweets_create()
 
     # Get client for Replicate
     replicate_client = replicate_init()
