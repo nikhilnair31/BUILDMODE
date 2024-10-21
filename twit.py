@@ -1,4 +1,5 @@
 import os
+import time
 from twikit import Client
 from dotenv import load_dotenv
 
@@ -8,6 +9,9 @@ USER_SCREEN_NAME = os.getenv('USER_SCREEN_NAME')
 USERNAME = os.getenv('USERNAME')
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
+TOTAL_TWEETS = os.getenv('TOTAL_TWEETS')
+RATE_LIMIT = os.getenv('RATE_LIMIT')
+RESET_INTERVAL = os.getenv('RESET_INTERVAL')
 
 # Initialize twitter client
 async def tweet_login():
@@ -36,12 +40,10 @@ async def tweet_user(client):
     
     return user
 
-# Get user tweets
-async def get_user_tweets(con, cur, user):
-    user_tweet_list = []
-    user_tweets = await user.get_tweets('Tweets', count=1)
+def clean_tweets(tweets):
+    cleaned_tweets = []
     
-    for tweet in user_tweets:
+    for tweet in tweets:
         tweet_id = tweet.id
         created_at_datetime = tweet.created_at_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
         full_text = tweet.full_text.strip()
@@ -52,10 +54,32 @@ async def get_user_tweets(con, cur, user):
             f'full_text: {full_text}',
             f'created_at_datetime: {created_at_datetime}',
             f'media_url_httpss_str: {media_url_httpss_str}',
-            f'\n',
             sep='\n'
         )
-        
-        user_tweet_list.append((tweet_id, created_at_datetime, full_text, media_url_httpss_str))
 
-    return user_tweet_list
+        cleaned_tweets.append(
+            (tweet_id,created_at_datetime,full_text,media_url_httpss_str)
+        )
+    
+    return cleaned_tweets
+
+# Get user tweets
+async def get_user_tweets(con, cur, user):
+    tweets = []
+    user_tweets = await user.get_tweets('Tweets', count='10')
+    tweets.extend(user_tweets)
+    
+    while len(tweets) < TOTAL_TWEETS:
+        # Check if we've hit the rate limit
+        if len(tweets) % RATE_LIMIT == 0 and len(tweets) > 0:
+            print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
+            time.sleep(RESET_INTERVAL)
+        
+        while user_tweets := await user_tweets.next():
+            if not user_tweets or len(tweets) >= TOTAL_TWEETS:
+                break
+            tweets.extend(user_tweets)
+    
+    cleaned_tweets = clean_tweets(tweets)
+
+    return cleaned_tweets

@@ -1,10 +1,6 @@
-import os
-import asyncio
 import numpy as np
-from dotenv import load_dotenv
 from helper import serialize_f32
-from twit import tweet_login, tweet_user, get_user_tweets
-from db import database_init, database_insert_tweet, database_insert_vec, database_select_tweet
+from db import database_init, database_select_tweet, database_insert_vec
 from api import replicate_init, replicate_embedding
 
 def set_embdedding(replicate_client, con, cur):
@@ -47,31 +43,7 @@ def set_embdedding(replicate_client, con, cur):
         # Insert data into the database
         database_insert_vec(con = con, cur = cur, data = (tweet_id, embedding_vec_ser))
 
-async def main():
-    # Initialize the database
-    con, cur = database_init()
-    database_vec_create()
-    database_tweets_create()
-
-    # Get client for Replicate
-    replicate_client = replicate_init()
-
-    # Login to Twitter and get the client
-    twitter_client = await tweet_login()
-
-    # Get user by screen name
-    user = await tweet_user(twitter_client)
-
-    # Fetch and store the user's tweets
-    user_tweets_list = await get_user_tweets(con, cur, user)
-    for tweet in user_tweets_list:
-        database_insert_tweet(con = con, cur = cur, data = tweet)
-
-    set_embdedding(replicate_client, con, cur)
-    
-    # Close the database connection
-    con.close()
-
 if __name__ == "__main__":
-    # Run the main async function
-    asyncio.run(main())
+    con, cur = database_init()
+    replicate_client = replicate_init()
+    set_embdedding(replicate_client, con, cur)

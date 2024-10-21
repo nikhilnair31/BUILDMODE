@@ -27,7 +27,7 @@ def database_init():
 
     return con, cur
     
-def database_vec_create():
+def database_vec_create(cur):
     cur.execute("""
         CREATE VIRTUAL TABLE VECS
         USING vec0(
@@ -36,11 +36,11 @@ def database_vec_create():
         );
     """)
 
-def database_tweets_create():
+def database_tweets_create(cur):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS 
         TWEETS (
-            ID INTEGER UNIQUE, 
+            ID INTEGER PRIMARY KEY, 
             CREATED_AT_DATETIME TEXT, 
             FULL_TEXT TEXT, 
             MEDIA_URL_HTTPSS_STR TEXT
@@ -51,7 +51,7 @@ def database_tweets_create():
 def database_insert_tweet(con, cur, data):
     cur.execute(
         """
-        INSERT INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA_URL_HTTPSS_STR) 
+        INSERT OR REPLACE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA_URL_HTTPSS_STR) 
         VALUES (?, ?, ?, ?);
         """, 
         data
@@ -62,7 +62,7 @@ def database_insert_tweet(con, cur, data):
 def database_insert_vec(con, cur, data):
     cur.execute(
         """
-        INSERT INTO VECS (ID, EMBEDDING) 
+        INSERT OR REPLACE INTO VECS (ID, EMBEDDING) 
         VALUES (?, ?);
         """, 
         data
