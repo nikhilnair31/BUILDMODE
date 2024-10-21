@@ -1,127 +1,87 @@
 import os
-import sqlite3
 import asyncio
-from twikit import Client
+import numpy as np
 from dotenv import load_dotenv
+from helper import serialize_f32
+from twit import tweet_login, tweet_user, get_user_tweets
+from db import database_init, database_insert_tweet, database_update_tweet
+from api import replicate_init, replicate_embedding
 
-load_dotenv()
+def set_embdedding(replicate_client, con, cur):
+    cur.execute('''SELECT * FROM tweets''') 
+    output = cur.fetchall()
 
-USER_SCREEN_NAME = os.environ.get('USER_SCREEN_NAME')
-USERNAME = os.environ.get('USERNAME')
-EMAIL = os.environ.get('EMAIL')
-PASSWORD = os.environ.get('PASSWORD')
-print(
-    f'USER_SCREEN_NAME: {USER_SCREEN_NAME}',
-    f'USERNAME: {USERNAME}',
-    f'EMAIL: {EMAIL}',
-    f'PASSWORD: {PASSWORD}',
-    f'\n###########################################\n',
-    sep='\n'
-)
+    for row in output: 
+        embedding_vec = []
+        input_dict = {}
 
-async def download_media():
-    tweet = await client.get_tweet_by_id('...')
-
-    for i, media in enumerate(tweet.media):
-        media_url = media.get('media_url_https')
-        extension = media_url.rsplit('.', 1)[-1]
-
-        response = await client.get(media_url, headers=client._base_headers)
-
-        with open(f'media_{i}.{extension}', 'wb') as f:
-            f.write(response.content)
-
-# Initialize sqlite client
-def database_init():
-    con = sqlite3.connect("data/tweets.db")
-    cur = con.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS 
-        tweets(
-            id INTEGER UNIQUE, 
-            created_at_datetime TEXT, 
-            full_text TEXT, 
-            media_url_httpss_str TEXT
-        )
-    """)
-    return con, cur
-# Insert data into sqlite client
-def database_insert_tweet(con, cur, data):
-    cur.execute(
-        """
-        INSERT INTO tweets(id, created_at_datetime, full_text, media_url_httpss_str) 
-        VALUES (?, ?, ?, ?);
-        """, 
-        data
-    )
-    con.commit()
-
-# Initialize twitter client
-async def tweet_login():
-    client = Client(
-        language='en-US',
-    )
-    await client.login(
-        auth_info_1=USERNAME,
-        auth_info_2=EMAIL,
-        password=PASSWORD
-    )
-    return client
-# Get user by screen name
-async def tweet_user(client):
-    user = await client.get_user_by_screen_name(USER_SCREEN_NAME)
-    print(
-        f'id: {user.id}',
-        f'name: {user.name}',
-        f'followers: {user.followers_count}',
-        f'tweets count: {user.statuses_count}',
-        f'\n###########################################\n',
-        sep='\n'
-    )
-    return user
-# Get user tweets
-async def get_user_tweets(con, cur, user):
-    user_tweets = await user.get_tweets('Tweets', count=1)
-    for tweet in user_tweets:
-        tweet_id = tweet.id
-        created_at_datetime = tweet.created_at_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-        full_text = tweet.full_text.strip()
-        media_url_httpss = [media_item["media_url_https"] for media_item in tweet.media] if tweet.media else "-"
-        media_url_httpss_str = ' | '.join(media_url_httpss)
-        
+        tweet_id, tweet_date, tweet_text, tweet_media, _ = row
         print(
-            f'id: {tweet.id}',
-            f'full_text: {full_text}',
-            f'created_at_datetime: {created_at_datetime}',
-            f'media_url_httpss_str: {media_url_httpss_str}',
+            f'tweet_id: {tweet_id}',
+            f'tweet_date: {tweet_date}',
+            f'tweet_text: {tweet_text}',
+            f'tweet_media: {tweet_media}',
             f'\n',
             sep='\n'
         )
-
+        
+        if tweet_media == '-':
+            input_dict = {"modality": "text", "text_input": tweet_text}
+            embedding_vec = replicate_embedding(replicate_client, input_dict)
+        else:
+            for media in tweet_media.split(' | '):
+                print(f'media: {media}')
+                input_dict = {"modality": "vision", "input": media}
+                vec = replicate_embedding(replicate_client, input_dict)
+                embedding_vec.append(vec)
+        print(f'embedding_vec shape: {embedding_vec.shape}')
+        
+        # Handle averaging if there are multiple vectors (e.g., multiple media files)
+        if isinstance(embedding_vec[0], list):
+            embedding_vec_avg = np.average(np.array(embedding_vec), axis=0)
+        else:
+            embedding_vec_avg = embedding_vec
+        print(f'embedding_vec_avg shape: {embedding_vec_avg.shape}')
+        
+        embedding_vec_ser = serialize_f32(embedding_vec_avg)
+        print(f'embedding_vec_ser shape: {embedding_vec_ser.shape}\n')
+        
         # Insert data into the database
-        database_insert_tweet(
-            con=con,
-            cur=cur,
-            data=(tweet_id, created_at_datetime, full_text, media_url_httpss_str)
+        database_update_tweet(
+            con = con,
+            cur = cur,
+            tweet_id = tweet_id,
+            vec_val = embedding_vec_ser
         )
 
 async def main():
     # Initialize the database
     con, cur = database_init()
 
+    # Get client for Replicate
+    # replicate_client = replicate_init()
+
     # Login to Twitter and get the client
-    client = await tweet_login()
+    # twitter_client = await tweet_login()
 
     # Get user by screen name
-    user = await tweet_user(client)
+    # user = await tweet_user(twitter_client)
 
     # Fetch and store the user's tweets
-    await get_user_tweets(con, cur, user)
+    # user_tweets_list = await get_user_tweets(con, cur, user)
+    # for tweet in user_tweets_list:
+    #     tweet_id, created_at_datetime, full_text, media_url_httpss_str = tweet
+    #     database_insert_tweet(
+    #         con=con,
+    #         cur=cur,
+    #         data=(tweet_id, created_at_datetime, full_text, media_url_httpss_str)
+    #     )
 
-    # Optionally download media for a specific tweet
-    # await download_media(client, tweet_id)
-
+    # set_embdedding(replicate_client, con, cur)
+    
     # Close the database connection
     con.close()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # Run the main async function
+    asyncio.run(main())
