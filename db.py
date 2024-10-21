@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import sqlite_vec
 from dotenv import load_dotenv
@@ -24,14 +25,20 @@ def database_init():
     
     cur = con.cursor()
     cur.execute("""
+        CREATE VIRTUAL TABLE VECS
+        USING vec0(
+            ID INTEGER PRIMARY KEY,
+            EMBEDDING FLOAT[1024] DISTANCE_METRIC = COSINE
+        );
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS 
-        tweets(
-            id INTEGER UNIQUE, 
-            created_at_datetime TEXT, 
-            full_text TEXT, 
-            media_url_httpss_str TEXT,
-            embedding float[1024]
-        )
+        TWEETS (
+            ID INTEGER UNIQUE, 
+            CREATED_AT_DATETIME TEXT, 
+            FULL_TEXT TEXT, 
+            MEDIA_URL_HTTPSS_STR TEXT
+        );
     """)
 
     return con, cur
@@ -40,8 +47,19 @@ def database_init():
 def database_insert_tweet(con, cur, data):
     cur.execute(
         """
-        INSERT INTO tweets(id, created_at_datetime, full_text, media_url_httpss_str) 
+        INSERT INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA_URL_HTTPSS_STR) 
         VALUES (?, ?, ?, ?);
+        """, 
+        data
+    )
+    con.commit()
+
+# Insert data into sqlite client
+def database_insert_vec(con, cur, data):
+    cur.execute(
+        """
+        INSERT INTO VECS (ID, EMBEDDING) 
+        VALUES (?, ?);
         """, 
         data
     )

@@ -47,37 +47,27 @@ def set_embdedding(replicate_client, con, cur):
         print(f'embedding_vec_ser shape: {embedding_vec_ser.shape}\n')
         
         # Insert data into the database
-        database_update_tweet(
-            con = con,
-            cur = cur,
-            tweet_id = tweet_id,
-            vec_val = embedding_vec_ser
-        )
+        database_insert_vec(con = con, cur = cur, tweet_id = tweet_id, vec_val = embedding_vec_ser)
 
 async def main():
     # Initialize the database
     con, cur = database_init()
 
     # Get client for Replicate
-    # replicate_client = replicate_init()
+    replicate_client = replicate_init()
 
     # Login to Twitter and get the client
-    # twitter_client = await tweet_login()
+    twitter_client = await tweet_login()
 
     # Get user by screen name
-    # user = await tweet_user(twitter_client)
+    user = await tweet_user(twitter_client)
 
     # Fetch and store the user's tweets
-    # user_tweets_list = await get_user_tweets(con, cur, user)
-    # for tweet in user_tweets_list:
-    #     tweet_id, created_at_datetime, full_text, media_url_httpss_str = tweet
-    #     database_insert_tweet(
-    #         con=con,
-    #         cur=cur,
-    #         data=(tweet_id, created_at_datetime, full_text, media_url_httpss_str)
-    #     )
+    user_tweets_list = await get_user_tweets(con, cur, user)
+    for tweet in user_tweets_list:
+        database_insert_tweet(con = con, cur = cur, data = tweet)
 
-    # set_embdedding(replicate_client, con, cur)
+    set_embdedding(replicate_client, con, cur)
     
     # Close the database connection
     con.close()
