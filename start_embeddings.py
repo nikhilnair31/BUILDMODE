@@ -1,3 +1,4 @@
+import re
 import numpy as np
 from helper import serialize_f32
 from db import database_init, database_select_tweet, database_insert_vec
@@ -10,21 +11,25 @@ def set_embdedding(replicate_client, con, cur):
         embedding_vec = []
         input_dict = {}
 
-        tweet_id, tweet_date, tweet_text, tweet_media = row
+        tweet_id, tweet_date, tweet_text, tweet_media_str, tweet_img_url = row
+        full_text = tweet_text.strip()
+        full_text_wo_rt = re.sub(r'RT @\w+:', '', full_text)
+        full_text_wo_url = re.sub(r'http\S+', '', full_text_wo_rt)
         print(
             f'tweet_id: {tweet_id}',
             f'tweet_date: {tweet_date}',
-            f'tweet_text: {tweet_text}',
-            f'tweet_media: {tweet_media}',
+            f'tweet_text: {full_text_wo_url}',
+            f'tweet_media_str: {tweet_media_str}',
+            f'tweet_img_url: {tweet_img_url}',
             f'\n',
             sep='\n'
         )
         
-        if tweet_media == '-':
-            input_dict = {"modality": "text", "text_input": tweet_text}
+        if tweet_img_url == '-':
+            input_dict = {"modality": "text", "text_input": full_text_wo_url}
             embedding_vec = replicate_embedding(replicate_client, input_dict)
         else:
-            for media in tweet_media.split(' | '):
+            for media in tweet_img_url.split(' | '):
                 print(f'media: {media}')
                 input_dict = {"modality": "vision", "input": media}
                 vec = replicate_embedding(replicate_client, input_dict)

@@ -6,7 +6,7 @@ from db import database_init, database_vec_create, database_tweets_create, datab
 
 async def main():
     con, cur = database_init()
-    # database_vec_create(cur)
+    database_vec_create(cur)
     database_tweets_create(cur)
 
     twitter_client = await tweet_login()

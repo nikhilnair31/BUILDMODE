@@ -29,7 +29,7 @@ def database_init():
     
 def database_vec_create(cur):
     cur.execute("""
-        CREATE VIRTUAL TABLE VECS
+        CREATE VIRTUAL TABLE IF NOT EXISTS VECS
         USING vec0(
             ID INTEGER PRIMARY KEY,
             EMBEDDING FLOAT[1024] DISTANCE_METRIC = COSINE
@@ -43,6 +43,7 @@ def database_tweets_create(cur):
             ID INTEGER PRIMARY KEY, 
             CREATED_AT_DATETIME TEXT, 
             FULL_TEXT TEXT, 
+            MEDIA TEXT,
             MEDIA_URL_HTTPSS_STR TEXT
         );
     """)
@@ -51,8 +52,8 @@ def database_tweets_create(cur):
 def database_insert_tweet(con, cur, data):
     cur.execute(
         """
-        INSERT OR REPLACE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA_URL_HTTPSS_STR) 
-        VALUES (?, ?, ?, ?);
+        INSERT OR REPLACE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_URL_HTTPSS_STR) 
+        VALUES (?, ?, ?, ?, ?);
         """, 
         data
     )

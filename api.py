@@ -27,7 +27,9 @@ def replicate_embedding(client, input_dict):
 
 # Initialize OpenAI client
 def openai_init():
-    client = OpenAI(OPEN_AI_API_KEY)
+    client = OpenAI(
+        api_key = OPEN_AI_API_KEY
+    )
     
     return client
 
@@ -42,3 +44,34 @@ def openai_embedding():
     print(f'embedding: {embedding}')
 
     return embedding
+
+# Generate OpenAI chat completion
+def openai_chat(client, query, content):
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        temperature = 0.9,
+        messages=[
+            {
+                "role": "system", 
+                "content": 
+                    f"""
+                    You are a tool called BUILDMODE. You have access to the user's saved social media posts. 
+                    When a user is searching for inspiration to build something, consolidate the content to help inspire the user.
+                    """
+            },
+            {
+                "role": "user", 
+                "content": 
+                    f"""
+                    Query: {query}
+
+                    Content: {content}
+                    """
+            }
+        ]
+    )
+
+    response = completion.choices[0].message
+    print(f'\nresponse: {response.content}')
+
+    return response
