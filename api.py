@@ -125,7 +125,13 @@ def openai_chat(client, query, content):
     )
 
     response = completion.choices[0].message
-    print(f'\nresponse: {response.content}')
+    print(
+        f'-------------------------------------------------------',
+        f'RESPONSE',
+        f'{response}',
+        f'-------------------------------------------------------',
+        sep='\n'
+    )
 
     return response
 
@@ -138,79 +144,22 @@ def anthropic_init():
     return client
 
 # Generate Anthropic chat completion
-def anthropic_chat(client, query, content):
+def anthropic_chat(client, system, messages):
     completion = client.messages.create(
         model = "claude-3-5-sonnet-20241022",
         max_tokens = 8192,
         temperature = 1,
-        system = f"""
-            You are BUILDMODE, an advanced product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
-            Core Functions:
-
-            Transform social media insights into actionable product ideas
-            Provide step-by-step guidance through all development stages
-            Offer data-driven market analysis and trend identification
-            Generate targeted brainstorming sessions
-
-            Key Approaches:
-
-            Ideation Phase:
-
-
-            Distill complex information into 3 clear, high-potential concepts
-            Focus on innovation gaps and market opportunities
-            Consider technical feasibility and resource requirements
-
-
-            Development Support:
-
-
-            Break down large projects into manageable milestones
-            Suggest specific tools and technologies
-            Provide risk assessment and mitigation strategies
-
-
-            Market Intelligence:
-
-
-            Analyze competitor landscapes
-            Identify target audience segments
-            Track relevant industry trends
-            Evaluate monetization strategies
-
-            Communication Style:
-
-            Adapt explanations to user's expertise level
-            Provide clear, actionable steps
-            Use relevant examples and case studies
-            Ask clarifying questions when needed
-
-            When providing inspiration:
-
-            Present exactly 3 concise, unique ideas
-            Include market potential for each suggestion
-            Highlight technological requirements
-            Note potential challenges and solutions
-
-            Your goal is to transform ideas into viable products while maintaining a balance between innovation, feasibility, and market demand. 
-            Always prioritize practical, actual, and actionable advice over theoretical concepts.
-        """,
-        messages = [
-            {
-                "role": "user", 
-                "content": 
-                    f"""
-                    Query: 
-                    {query}
-
-                    Content: 
-                    {content}
-                    """
-            }
-        ]
+        system = system,
+        messages = messages
     )
 
-    response = completion.content.text
-    print(f'\nresponse: {response}')
+    response = completion.content[0].text
+    print(
+        f'-------------------------------------------------------',
+        f'RESPONSE',
+        f'{response}',
+        f'-------------------------------------------------------',
+        sep='\n'
+    )
     
     return response
