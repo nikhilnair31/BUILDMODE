@@ -18,12 +18,12 @@ def database_init():
     sqlite_version, vec_version = con.execute(
         "select sqlite_version(), vec_version()"
     ).fetchone()
-    print(
-        f'\n###########################################\n',
-        f"sqlite_version={sqlite_version}, vec_version={vec_version}",
-        f'\n###########################################\n',
-        sep='\n'
-    )
+    # print(
+    #     f'\n###########################################\n',
+    #     f"sqlite_version={sqlite_version}, vec_version={vec_version}",
+    #     f'\n###########################################\n',
+    #     sep='\n'
+    # )
 
     return con, cur
     
