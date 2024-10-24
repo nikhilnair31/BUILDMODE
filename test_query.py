@@ -1,4 +1,4 @@
-from api import replicate_init, replicate_embedding, openai_init, openai_chat
+from api import replicate_init, replicate_embedding, openai_init, openai_chat, anthropic_init, anthropic_chat
 from db import database_init
 from helper import serialize_f32, print_select_rows
 
