@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OPEN_AI_API_KEY = os.getenv('OPEN_AI_API_KEY')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 REPLICATE_API_KEY = os.getenv('REPLICATE_API_KEY')
 
 #region Replicate
@@ -148,7 +147,7 @@ def openai_chat(client, query, content):
 # Initialize Anthropic client
 def anthropic_init(llm_api_key):
     client = anthropic.Anthropic(
-        api_key =  llm_api_key if llm_api_key else ANTHROPIC_API_KEY
+        api_key =  llm_api_key
     )
     
     return client

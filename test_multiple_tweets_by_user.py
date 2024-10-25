@@ -5,6 +5,7 @@ import asyncio
 from pathlib import Path
 from twikit import Client
 from dotenv import load_dotenv
+from helper import serialize_clean
 
 load_dotenv()
 
@@ -13,7 +14,7 @@ USERNAME = os.getenv('USERNAME')
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
 
-async def main():
+async def pull_multiple_tweets():
     client = Client('en-US')
     await client.login(
         auth_info_1 = USERNAME,
@@ -22,15 +23,6 @@ async def main():
     )
     
     user = await client.get_user_by_screen_name(USER_SCREEN_NAME)
-    print(
-        f'\n###########################################\n',
-        f'id: {user.id}',
-        f'name: {user.name}',
-        f'followers: {user.followers_count}',
-        f'tweets count: {user.statuses_count}',
-        f'\n###########################################\n',
-        sep='\n'
-    )
 
     tweets = await user.get_tweets('Tweets')
     tweets_result = tweets.__dict__["_Result__results"]
@@ -54,4 +46,4 @@ async def main():
     for tweet in tweets[:2]:
         print(f'--------------------\n{tweet.__dict__}\n--------------------\n')
 
-asyncio.run(main())
+asyncio.run(pull_multiple_tweets())

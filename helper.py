@@ -1,3 +1,4 @@
+import json
 import struct
 from typing import List
 
@@ -16,3 +17,15 @@ def print_select_rows(rows):
             sep='\n'
         )
         idx += 1
+
+# Function to automatically remove non-serializable attributes
+def serialize_clean(tweet):
+    clean_data = {}
+    for key, value in tweet.__dict__.items():
+        try:
+            # Try serializing each attribute to JSON
+            json.dumps(value)
+            clean_data[key] = value  # Only add it if it's serializable
+        except (TypeError, OverflowError):
+            pass  # Skip non-serializable fields
+    return clean_data

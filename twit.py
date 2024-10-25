@@ -4,6 +4,7 @@ import json
 import time
 from twikit import Client
 from dotenv import load_dotenv
+from helper import serialize_clean
 
 load_dotenv()
 
@@ -14,17 +15,6 @@ USERNAME = os.getenv('USERNAME')
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
 
-# Function to automatically remove non-serializable attributes
-def serialize_clean(tweet):
-    clean_data = {}
-    for key, value in tweet.__dict__.items():
-        try:
-            # Try serializing each attribute to JSON
-            json.dumps(value)
-            clean_data[key] = value  # Only add it if it's serializable
-        except (TypeError, OverflowError):
-            pass  # Skip non-serializable fields
-    return clean_data
 # Converting the Tweet object to a JSON string
 def format_tweet_dump_data(tweet_dump):
     tweets_result = tweet_dump.__dict__["_Result__results"]
