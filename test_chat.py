@@ -1,9 +1,10 @@
 import asyncio
 import streamlit as st
-from db import database_init
+from db import database_init, database_select_vec
 from api import replicate_init, replicate_embedding, openai_init, openai_chat, anthropic_init, anthropic_chat
 from helper import serialize_f32, print_select_rows
-from scrape_twitter import main as scrape_twitter_func
+from scrape_twitter import scrape_twitter_func
+from start_embeddings import set_embdedding_func
 
 messages = []
 system = f"""
@@ -71,29 +72,6 @@ system = f"""
 con, cur = database_init()
 replicate_client = replicate_init()
 
-def get_query_context(query_vec, cnt):
-    global system
-
-    rows = cur.execute(
-        f"""
-        SELECT T.ID, T.FULL_TEXT, T.MEDIA_URL_HTTPSS_STR
-        FROM TWEETS T
-        INNER JOIN (
-            SELECT ID
-            FROM VECS
-            WHERE EMBEDDING MATCH ? AND K = {cnt}
-            ORDER BY DISTANCE ASC
-        ) V
-        ON T.ID = V.ID
-        """,
-        [serialize_f32(query_vec)],
-    ).fetchall()
-    # print_select_rows(rows)
-
-    system += str(rows)
-
-    return system
-
 # Define a function for the chat interface (default page)
 def chat_page():
     st.title("BUILDMODE")
@@ -101,8 +79,7 @@ def chat_page():
     with st.sidebar:
         st.radio(
             "Pick the LLM model",
-            ["OpenAI", "Anthropic"],
-            index = None,
+            ["Anthropic", "OpenAI"]
         )
         count = st.slider("How many posts to reference?", 10, 200, 100)
     
@@ -113,7 +90,7 @@ def chat_page():
         st.chat_message(msg["role"]).write(msg["content"])
 
     if query := st.chat_input():
-        if not anthropic_api_key:
+        if "anthropic_api_key" not in st.session_state["api_keys"]:
             st.info("Please add your Anthropic API key to continue.")
             st.stop()
         
@@ -121,9 +98,12 @@ def chat_page():
         if len(st.session_state.messages) == 1:
             input_dict = {"modality": "text", "text_input": query}
             query_vec = replicate_embedding(replicate_client, input_dict)
-            system_context = get_query_context(query_vec, 100)
+            query_vec_serialized = [serialize_f32(query_vec)]
+            
+            rows = database_select_vec(cur, query_vec_serialized, count)
+            system_context += str(rows)
 
-        anthropic_client = anthropic_init(anthropic_api_key)
+        anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
         st.session_state.messages.append({"role": "user", "content": query})
         st.chat_message("user").write(query)
         response = anthropic_chat(
@@ -134,7 +114,9 @@ def chat_page():
         st.session_state.messages.append({"role": "assistant", "content": response})
         assistant_msg = st.chat_message("assistant")
         assistant_msg.markdown(response)
-        assistant_msg.link_button("Go to post", url)
+        
+        #TODO: Figure out how to pull URL from response
+        assistant_msg.link_button("Go to post", "https://x.com/i/bookmarks")
 
 # Define a function for the Scraping page
 def scraping_page():
@@ -143,6 +125,10 @@ def scraping_page():
     sync_twitter = st.button("Sync Twitter")
     if sync_twitter:
         asyncio.run(scrape_twitter_func())
+
+    load_data = st.button("Load Data")
+    if load_data:
+        set_embdedding_func(replicate_client, con, cur)
 
 # Define a function for the API keys input page
 def settings_page():

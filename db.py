@@ -93,7 +93,7 @@ def database_insert_data(con, cur, data):
 def database_insert_vec(con, cur, data):
     cur.execute(
         """
-        INSERT OR REPLACE INTO VECS (ID, EMBEDDING) 
+        INSERT OR IGNORE INTO VECS (ID, EMBEDDING) 
         VALUES (?, ?);
         """, 
         data
@@ -110,11 +110,35 @@ def database_select_tweet_dump(cur):
     
     return output
 
-
 def database_select_tweet(cur):
-    cur.execute('''SELECT * FROM TWEETS''')
+    cur.execute(
+        f"""
+        SELECT * 
+        FROM TWEETS
+        WHERE ID NOT IN (SELECT ID FROM VECS)
+        """
+    )
     output = cur.fetchall()
     
     return output
+    
+def database_select_vec(cur, query_vec_serialized, cnt):
+    cur.execute(
+        f"""
+        SELECT T.ID, T.FULL_TEXT, T.MEDIA_CONTENT_URL, T.MEDIA_CONTENT_URL
+        FROM TWEETS T
+        INNER JOIN (
+            SELECT ID
+            FROM VECS
+            WHERE EMBEDDING MATCH ? AND K = {cnt}
+            ORDER BY DISTANCE ASC
+        ) V
+        ON T.ID = V.ID
+        """,
+        query_vec_serialized,
+    )
+    rows = cur.fetchall()
+    
+    return rows
 
 #endregion

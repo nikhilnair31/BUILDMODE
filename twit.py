@@ -43,6 +43,7 @@ def clean_tweet_dump_data(tweets_str):
         created_at_datetime = tweet["created_at"]
         final_created_at_datetime = created_at_datetime
         
+        #TODO: See why full text is incomplete
         full_text = tweet["full_text"].strip()
         full_text_wo_rt = re.sub(r'RT @\w+:', '', full_text)
         full_text_wo_url = re.sub(r'http\S+', '', full_text_wo_rt)
@@ -59,16 +60,6 @@ def clean_tweet_dump_data(tweets_str):
         media_post_urls = [media_item["expanded_url"] for media_item in media] if media else "-"
         media_post_urls_str = ' | '.join(media_post_urls)
         final_post_urls = media_post_urls_str
-        
-        # print(
-        #     f'id: {tweet_id}',
-        #     f'created_at_datetime: {final_created_at_datetime}',
-        #     f'full_text: {final_text}',
-        #     f'media: {final_media}',
-        #     f'media_content_urls: {media_content_urls_str}',
-        #     f'media_post_urls: {media_post_urls_str}',
-        #     sep='\n'
-        # )
 
         cleaned_tweets.append(
             (
@@ -160,7 +151,7 @@ async def get_user_tweets(con, cur, user):
 
     return all_tweets
 
-# Get user tweets
+# Get user bookmarks
 async def get_user_bookmarks(con, cur, client):
     cnt = 0
     all_bookmarks = []

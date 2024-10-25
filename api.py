@@ -164,13 +164,6 @@ def anthropic_chat(client, system, messages):
     )
 
     response = completion.content[0].text
-    print(
-        f'-------------------------------------------------------',
-        f'RESPONSE',
-        f'{response}',
-        f'-------------------------------------------------------',
-        sep='\n'
-    )
     
     return response
 
