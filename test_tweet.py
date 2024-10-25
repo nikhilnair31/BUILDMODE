@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import asyncio
 from pathlib import Path
 from twikit import Client
@@ -32,7 +33,25 @@ async def main():
     )
 
     tweets = await user.get_tweets('Tweets')
-    for tweet in tweets:
-        print(f'tweet: {tweet}')
+    tweets_result = tweets.__dict__["_Result__results"]
+    print(
+        f'{tweets_result}',
+        sep='\n'
+    )
+    
+    tweets_data = [tweet.__dict__ for tweet in tweets_result]
+    print(
+        f'{tweets_data}',
+        sep='\n'
+    )
+    
+    tweets_json = json.dumps(tweets_data)
+    print(
+        f'{tweets_json}',
+        sep='\n'
+    )
+    
+    for tweet in tweets[:2]:
+        print(f'--------------------\n{tweet.__dict__}\n--------------------\n')
 
 asyncio.run(main())

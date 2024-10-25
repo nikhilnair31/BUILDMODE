@@ -3,11 +3,13 @@ import sqlite3
 import sqlite_vec
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 DB_PATH = os.getenv('DB_PATH')
+print(f'DB_PATH: {DB_PATH}')
 
-# Initialize sqlite client
+#region Init
+
 def database_init():
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
@@ -26,8 +28,12 @@ def database_init():
     # )
 
     return con, cur
-    
-def database_vec_create(cur):
+
+#endregion
+
+#region Create tables     
+
+def database_create_vec(cur):
     cur.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS VECS
         USING vec0(
@@ -36,7 +42,7 @@ def database_vec_create(cur):
         );
     """)
 
-def database_tweets_create(cur):
+def database_create_tweets(cur):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS 
         TWEETS (
@@ -44,22 +50,46 @@ def database_tweets_create(cur):
             CREATED_AT_DATETIME TEXT, 
             FULL_TEXT TEXT, 
             MEDIA TEXT,
-            MEDIA_URL_HTTPSS_STR TEXT
+            MEDIA_POST_URL TEXT,
+            MEDIA_CONTENT_URL TEXT
         );
     """)
 
-# Insert data into sqlite client
-def database_insert_tweet(con, cur, data):
+def database_create_tweet_dump(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS 
+        TWEET_DUMP (
+            CNT INTEGER, 
+            TWEET_DUMP TEXT,
+            TYPE TEXT,
+            NEXT_CURSOR TEXT
+        );
+    """)
+
+#endregion
+
+#region Insert data
+
+def database_insert_dump_data(con, cur, data):
     cur.execute(
         """
-        INSERT OR IGNORE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_URL_HTTPSS_STR) 
-        VALUES (?, ?, ?, ?, ?);
+        INSERT OR IGNORE INTO TWEET_DUMP (CNT, TWEET_DUMP, TYPE, NEXT_CURSOR) 
+        VALUES (?, ?, ?, ?);
         """, 
         data
     )
     con.commit()
 
-# Insert data into sqlite client
+def database_insert_data(con, cur, data):
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_POST_URL, MEDIA_CONTENT_URL) 
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, 
+        data
+    )
+    con.commit()
+
 def database_insert_vec(con, cur, data):
     cur.execute(
         """
@@ -70,21 +100,21 @@ def database_insert_vec(con, cur, data):
     )
     con.commit()
 
-# Update data into sqlite client
-def database_update_tweet(con, cur, tweet_id, vec_val):
-    cur.execute(
-        f"""
-        UPDATE tweets 
-        SET embedding = ?
-        WHERE id = ?;
-        """,
-        (vec_val, tweet_id)
-    )
-    con.commit()
+#endregion
 
-# Select data into sqlite client
+#region Select data
+
+def database_select_tweet_dump(cur):
+    cur.execute('''SELECT * FROM TWEET_DUMP''')
+    output = cur.fetchall()
+    
+    return output
+
+
 def database_select_tweet(cur):
     cur.execute('''SELECT * FROM TWEETS''')
     output = cur.fetchall()
     
     return output
+
+#endregion

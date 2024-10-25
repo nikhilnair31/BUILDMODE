@@ -14,16 +14,89 @@ USERNAME = os.getenv('USERNAME')
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
 
+# Function to automatically remove non-serializable attributes
+def serialize_clean(tweet):
+    clean_data = {}
+    for key, value in tweet.__dict__.items():
+        try:
+            # Try serializing each attribute to JSON
+            json.dumps(value)
+            clean_data[key] = value  # Only add it if it's serializable
+        except (TypeError, OverflowError):
+            pass  # Skip non-serializable fields
+    return clean_data
+# Converting the Tweet object to a JSON string
+def format_tweet_dump_data(tweet_dump):
+    tweets_result = tweet_dump.__dict__["_Result__results"]
+    tweets_data = [serialize_clean(tweet) for tweet in tweets_result]
+    tweets_json = json.dumps(tweets_data)
+
+    return tweets_json
+# Selecting relevant data
+def clean_tweet_dump_data(tweets_str):
+    cleaned_tweets = []
+    
+    tweets = json.loads(tweets_str)
+    for tweet in tweets:
+        tweet_id = tweet["id"]
+        
+        created_at_datetime = tweet["created_at"]
+        final_created_at_datetime = created_at_datetime
+        
+        full_text = tweet["full_text"].strip()
+        full_text_wo_rt = re.sub(r'RT @\w+:', '', full_text)
+        full_text_wo_url = re.sub(r'http\S+', '', full_text_wo_rt)
+        final_text = full_text_wo_url
+        
+        media = tweet["media"]
+        media_str = json.dumps(media)
+        final_media = media_str
+        
+        media_content_urls = [media_item["media_url_https"] for media_item in media] if media else "-"
+        media_content_urls_str = ' | '.join(media_content_urls)
+        final_content_urls = media_content_urls_str
+        
+        media_post_urls = [media_item["expanded_url"] for media_item in media] if media else "-"
+        media_post_urls_str = ' | '.join(media_post_urls)
+        final_post_urls = media_post_urls_str
+        
+        # print(
+        #     f'id: {tweet_id}',
+        #     f'created_at_datetime: {final_created_at_datetime}',
+        #     f'full_text: {final_text}',
+        #     f'media: {final_media}',
+        #     f'media_content_urls: {media_content_urls_str}',
+        #     f'media_post_urls: {media_post_urls_str}',
+        #     sep='\n'
+        # )
+
+        cleaned_tweets.append(
+            (
+                tweet_id,
+                final_created_at_datetime,
+                final_text,
+                final_media,
+                final_post_urls,
+                final_content_urls
+            )
+        )
+    
+    return cleaned_tweets
+
 # Initialize twitter client
 async def tweet_login():
     client = Client(
         language = 'en-US',
     )
-    await client.login(
-        auth_info_1 = USERNAME,
-        auth_info_2 = EMAIL,
-        password = PASSWORD
-    )
+    if os.path.exists('cookies.json'):
+        client.load_cookies('cookies.json')
+    else:
+        await client.login(
+            auth_info_1 = USERNAME,
+            auth_info_2 = EMAIL,
+            password = PASSWORD
+        )
+        client.save_cookies('cookies.json')
 
     return client
 
@@ -42,66 +115,92 @@ async def tweet_user(client):
     
     return user
 
-def clean_tweets(tweets):
-    cleaned_tweets = []
-    
-    for tweet in tweets:
-        tweet_id = tweet.id
-        created_at_datetime = tweet.created_at_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-        full_text = tweet.full_text.strip()
-        full_text_wo_rt = re.sub(r'RT @\w+:', '', full_text)
-        full_text_wo_url = re.sub(r'http\S+', '', full_text_wo_rt)
-        media = tweet.media
-        media_str = json.dumps(media)
-        media_url_httpss = [media_item["media_url_https"] for media_item in media] if media else "-"
-        media_url_httpss_str = ' | '.join(media_url_httpss)
-        print(
-            f'id: {tweet.id}',
-            f'full_text: {full_text_wo_url}',
-            f'created_at_datetime: {created_at_datetime}',
-            f'media_str: {media_str}',
-            f'media_url_httpss_str: {media_url_httpss_str}',
-            sep='\n'
-        )
-
-        cleaned_tweets.append(
-            (tweet_id,created_at_datetime,full_text_wo_url,media_str,media_url_httpss_str)
-        )
-    
-    return cleaned_tweets
-
 # Get user tweets
 async def get_user_tweets(con, cur, user):
+    cnt = 0
     all_tweets = []
-
-    cursor_file = Path("cursor.txt")
-    cursor = None
-    if cursor_file.exists():
-        cursor = cursor_file.read_text()
     
     try:
         tweets = await user.get_tweets('Tweets')
-        all_tweets += tweets
-        print(f'Length of all tweets: {len(all_tweets)}')
-    
-        cursor = tweets.next_cursor
-        cursor_file.write_text(cursor)
+        cnt += 1
+        all_tweets.append(
+            (
+                cnt, 
+                format_tweet_dump_data(tweets), 
+                "Tweets", 
+                tweets.next_cursor
+            )
+        )
+        print(f'Tweets Count: {cnt}')
         
         # Check if we've hit the rate limit
         if len(all_tweets) % RATE_LIMIT == 0 and len(all_tweets) > 0:
             print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
             time.sleep(RESET_INTERVAL)
         
-        while tweets := await tweets.next():
+        while True:
+            tweets = await tweets.next()
+
             if not tweets:
                 break
-            all_tweets += tweets
-            print(f'Length of all tweets: {len(all_tweets)}')
-            cursor_file.write_text(tweets.next_cursor)
+            
+            cnt += 1
+            all_tweets.append(
+                (
+                    cnt, 
+                    format_tweet_dump_data(tweets), 
+                    "Tweets", 
+                    tweets.next_cursor
+                )
+            )
+            print(f'Tweets Count: {cnt}')
     
     except Exception as e:
         print(f"Error: {e}")
 
-    cleaned_tweets = clean_tweets(all_tweets)
+    return all_tweets
 
-    return cleaned_tweets
+# Get user tweets
+async def get_user_bookmarks(con, cur, client):
+    cnt = 0
+    all_bookmarks = []
+    
+    try:
+        bookmarks = await client.get_bookmarks()
+        cnt += 1
+        all_bookmarks.append(
+            (
+                cnt, 
+                format_tweet_dump_data(bookmarks), 
+                "Bookmarks", 
+                bookmarks.next_cursor
+            )
+        )
+        print(f'Bookmarks Count: {cnt}')
+        
+        # Check if we've hit the rate limit
+        if len(all_bookmarks) % RATE_LIMIT == 0 and len(all_bookmarks) > 0:
+            print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
+            time.sleep(RESET_INTERVAL)
+        
+        while True:
+            bookmarks = await bookmarks.next()
+
+            if not bookmarks:
+                break
+            
+            cnt += 1
+            all_bookmarks.append(
+                (
+                    cnt, 
+                    format_tweet_dump_data(bookmarks), 
+                    "Bookmarks", 
+                    bookmarks.next_cursor
+                )
+            )
+            print(f'Bookmarks Count: {cnt}')
+    
+    except Exception as e:
+        print(f"Error: {e}")
+
+    return all_bookmarks
