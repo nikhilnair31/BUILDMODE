@@ -52,7 +52,7 @@ def database_tweets_create(cur):
 def database_insert_tweet(con, cur, data):
     cur.execute(
         """
-        INSERT OR REPLACE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_URL_HTTPSS_STR) 
+        INSERT OR IGNORE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_URL_HTTPSS_STR) 
         VALUES (?, ?, ?, ?, ?);
         """, 
         data

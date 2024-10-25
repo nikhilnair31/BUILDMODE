@@ -10,6 +10,8 @@ OPEN_AI_API_KEY = os.getenv('OPEN_AI_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 REPLICATE_API_KEY = os.getenv('REPLICATE_API_KEY')
 
+#region Replicate
+
 # Initialize Replicate client
 def replicate_init():
     client = replicate.Client(
@@ -26,6 +28,10 @@ def replicate_embedding(client, input_dict):
     )
     
     return output_embedding_vec
+
+#endregion
+
+#region OpenAI
 
 # Initialize OpenAI client
 def openai_init():
@@ -135,10 +141,14 @@ def openai_chat(client, query, content):
 
     return response
 
+#endregion
+
+#region Anthropic
+
 # Initialize Anthropic client
-def anthropic_init():
+def anthropic_init(llm_api_key):
     client = anthropic.Anthropic(
-        api_key = ANTHROPIC_API_KEY
+        api_key =  llm_api_key if llm_api_key else ANTHROPIC_API_KEY
     )
     
     return client
@@ -163,3 +173,5 @@ def anthropic_chat(client, system, messages):
     )
     
     return response
+
+#endregion

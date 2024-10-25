@@ -1,5 +1,6 @@
-from api import replicate_init, replicate_embedding, openai_init, openai_chat, anthropic_init, anthropic_chat
+import streamlit as st
 from db import database_init
+from api import replicate_init, replicate_embedding, openai_init, openai_chat, anthropic_init, anthropic_chat
 from helper import serialize_f32, print_select_rows
 
 messages = []
@@ -66,20 +67,19 @@ system = f"""
 """
 
 con, cur = database_init()
-anthropic_client = anthropic_init()
 replicate_client = replicate_init()
 
-def get_query_context(query_vec):
+def get_query_context(query_vec, cnt):
     global system
 
     rows = cur.execute(
-        """
+        f"""
         SELECT T.ID, T.FULL_TEXT, T.MEDIA_URL_HTTPSS_STR
         FROM TWEETS T
         INNER JOIN (
             SELECT ID
             FROM VECS
-            WHERE EMBEDDING MATCH ? AND K = 100
+            WHERE EMBEDDING MATCH ? AND K = {cnt}
             ORDER BY DISTANCE ASC
         ) V
         ON T.ID = V.ID
@@ -92,41 +92,56 @@ def get_query_context(query_vec):
 
     return system
 
-def conversation_loop():
-    global system, messages
+#region Streamlit app layout
+
+st.set_page_config(
+    page_title="BUILDMODE",
+    page_icon="⚙️",
+    layout="centered",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': "https://github.com/nikhilnair31/BUILDMODE"
+    }
+)
+
+st.title("BUILDMODE")
+
+with st.sidebar:
+    anthropic_api_key = st.text_input("Anthropic API Key", key="chatbot_api_key", type="password")
+    option = st.selectbox(
+        "Pick the LLM model",
+        ("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022"),
+    )
+    count = st.slider("How many posts to reference?", 10, 200, 100)
+
+if "messages" not in st.session_state:
+    st.session_state["messages"] = [{"role": "assistant", "content": "What do you want to BUILD today?"}]
+
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+if query := st.chat_input():
+    if not anthropic_api_key:
+        st.info("Please add your Anthropic API key to continue.")
+        st.stop()
     
-    while True:
-        # Get user input for the conversation
-        query = input(f"YOU\n")
-        
-        if query.lower() in ['terminate']:
-            print("Ending conversation.")
-            break
+    system_context = system
+    if len(st.session_state.messages) == 1:
+        input_dict = {"modality": "text", "text_input": query}
+        query_vec = replicate_embedding(replicate_client, input_dict)
+        system_context = get_query_context(query_vec, 100)
 
-        system_context  = system
-        if len(messages) == 0:
-            input_dict = {"modality": "text", "text_input": query}
-            query_vec = replicate_embedding(replicate_client, input_dict)
-            system_context = get_query_context(query_vec)
-        
-        # Append user message to chat history
-        user_message = {
-            "role": "user",
-            "content": query
-        }
-        messages.append(user_message)
-        
-        # Fetch response from Anthropic API
-        response = anthropic_chat(anthropic_client, system_context, messages)
-        
-        if response:
-            # Append assistant's response to chat history
-            assistant_message = {
-                "role": "assistant",
-                "content": response
-            }
-            messages.append(assistant_message)
+    anthropic_client = anthropic_init(anthropic_api_key)
+    st.session_state.messages.append({"role": "user", "content": query})
+    st.chat_message("user").write(query)
+    response = anthropic_chat(
+        anthropic_client, 
+        system_context, 
+        st.session_state.messages
+    )
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    assistant_msg = st.chat_message("assistant")
+    assistant_msg.markdown(response)
+    assistant_msg.link_button("Go to post", url)
 
-if __name__ == "__main__":
-    print("Starting chat... (type 'exit' to stop)")
-    conversation_loop()
+#endregion

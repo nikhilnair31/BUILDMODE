@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOTAL_TWEETS = int(os.getenv('TOTAL_TWEETS'))
 RATE_LIMIT = int(os.getenv('RATE_LIMIT'))
 RESET_INTERVAL = int(os.getenv('RESET_INTERVAL'))
 USER_SCREEN_NAME = os.getenv('USER_SCREEN_NAME')
@@ -32,6 +31,7 @@ async def tweet_login():
 async def tweet_user(client):
     user = await client.get_user_by_screen_name(USER_SCREEN_NAME)
     print(
+        f'\n###########################################\n',
         f'id: {user.id}',
         f'name: {user.name}',
         f'followers: {user.followers_count}',
@@ -72,25 +72,36 @@ def clean_tweets(tweets):
 
 # Get user tweets
 async def get_user_tweets(con, cur, user):
-    tweets = []
+    all_tweets = []
+
+    cursor_file = Path("cursor.txt")
+    cursor = None
+    if cursor_file.exists():
+        cursor = cursor_file.read_text()
     
     try:
-        user_tweets = await user.get_tweets('Tweets', count='10')
-        tweets.extend(user_tweets)
+        tweets = await user.get_tweets('Tweets')
+        all_tweets += tweets
+        print(f'Length of all tweets: {len(all_tweets)}')
+    
+        cursor = tweets.next_cursor
+        cursor_file.write_text(cursor)
         
-        while len(tweets) < TOTAL_TWEETS:
-            # Check if we've hit the rate limit
-            if len(tweets) % RATE_LIMIT == 0 and len(tweets) > 0:
-                print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
-                time.sleep(RESET_INTERVAL)
-            
-            while user_tweets := await user_tweets.next():
-                if not user_tweets or len(tweets) >= TOTAL_TWEETS:
-                    break
-                tweets.extend(user_tweets)
+        # Check if we've hit the rate limit
+        if len(all_tweets) % RATE_LIMIT == 0 and len(all_tweets) > 0:
+            print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
+            time.sleep(RESET_INTERVAL)
+        
+        while tweets := await tweets.next():
+            if not tweets:
+                break
+            all_tweets += tweets
+            print(f'Length of all tweets: {len(all_tweets)}')
+            cursor_file.write_text(tweets.next_cursor)
+    
     except Exception as e:
         print(f"Error: {e}")
 
-    cleaned_tweets = clean_tweets(tweets)
+    cleaned_tweets = clean_tweets(all_tweets)
 
     return cleaned_tweets
