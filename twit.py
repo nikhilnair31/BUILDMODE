@@ -74,15 +74,15 @@ async def tweet_login():
     client = Client(
         language = 'en-US',
     )
-    if os.path.exists('cookies.json'):
-        client.load_cookies('cookies.json')
+    if os.path.exists('data/cookies.json'):
+        client.load_cookies('data/cookies.json')
     else:
         await client.login(
             auth_info_1 = USERNAME,
             auth_info_2 = EMAIL,
             password = PASSWORD
         )
-        client.save_cookies('cookies.json')
+        client.save_cookies('data/cookies.json')
 
     return client
 
