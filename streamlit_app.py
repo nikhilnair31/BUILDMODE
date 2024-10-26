@@ -1,7 +1,16 @@
 import asyncio
 import streamlit as st
-from db import database_init, database_select_vec
-from api import replicate_init, replicate_embedding, anthropic_init, anthropic_chat
+from db import (
+    database_init, 
+    database_select_vec, 
+    database_select_github_user
+)
+from api import (
+    replicate_init, 
+    replicate_embedding, 
+    anthropic_init, 
+    anthropic_chat
+)
 from helper import serialize_f32
 from scrape_twitter import scrape_twitter_func
 from scrape_github import scrape_github_func
@@ -46,9 +55,6 @@ system = f"""
     Communication Style:
     Use relevant examples and case studies
     Ask clarifying questions when needed
-
-    Content:
-    
 """
 
 con, cur = database_init()
@@ -82,9 +88,16 @@ def chat_page():
             query_vec = replicate_embedding(replicate_client, input_dict)
             query_vec_serialized = [serialize_f32(query_vec)]
             
-            rows = database_select_vec(cur, query_vec_serialized, count)
-            system_context += str(rows)
-            print(f'system_context\n{system_context}')
+            similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
+            github_user_rows = database_select_github_user(cur)
+            system_context += f'''
+                User's Github Profile and Repos Data:
+                {str(github_user_rows)}
+
+                User's Social Media Content:
+                {str(similar_tweets_rows)}
+            '''
+            # print(f'system_context\n{system_context}')
 
         anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
         st.session_state.messages.append({"role": "user", "content": query})

@@ -207,7 +207,7 @@ def database_select_tweet(cur):
 def database_select_vec(cur, query_vec_serialized, cnt):
     cur.execute(
         f"""
-        SELECT T.ID, T.FULL_TEXT, T.MEDIA_CONTENT_URL, T.MEDIA_CONTENT_URL
+        SELECT T.ID, T.FULL_TEXT
         FROM TWEETS T
         INNER JOIN (
             SELECT ID
@@ -230,6 +230,17 @@ def database_select_tweet_wo_media(cur):
         FROM TWEETS
         WHERE MEDIA_CONTENT_URLS = "-"
         '''
+    )
+    output = cur.fetchall()
+    
+    return output
+
+def database_select_github_user(cur):
+    cur.execute(
+        f"""
+        SELECT LANGUAGE_COUNT, TECHNOLOGIES, REPOS_SUMMARY
+        FROM GIT_USER
+        """
     )
     output = cur.fetchall()
     
