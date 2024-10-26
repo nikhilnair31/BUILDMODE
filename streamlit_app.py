@@ -11,7 +11,11 @@ from api import (
     anthropic_init, 
     anthropic_chat
 )
-from helper import serialize_f32
+from helper import (
+    serialize_f32,
+    save_session_state,
+    load_session_state
+)
 from scrape_twitter import scrape_twitter_func
 from scrape_github import scrape_github_func
 from start_embeddings import set_embdedding_func
@@ -134,6 +138,8 @@ def scraping_page():
 # Define a function for the API keys input page
 def settings_page():
     st.title("SETTINGS")
+    
+    load_session_state()
 
     # Save API keys in session state
     if "api_keys" not in st.session_state:
@@ -158,6 +164,7 @@ def settings_page():
     # Save button
     if st.button("Save"):
         st.success("API keys saved!")
+        save_session_state()
 
 # App name and icon
 st.set_page_config(
