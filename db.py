@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 DB_PATH = os.getenv('DB_PATH')
-print(f'DB_PATH: {DB_PATH}')
 
 #region Init
 
@@ -66,8 +65,34 @@ def database_create_tweet_dump(cur):
         );
     """)
 
-def database_create_github():
-    pass
+def database_create_github_user(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS 
+        GIT_USER (
+            USERNAME TEXT PRIMARY KEY, 
+            LANGUAGE_COUNT TEXT,
+            TECHNOLOGIES TEXT,
+            REPO_EXPLAINERS TEXT,
+            REPOS_SUMMARY TEXT
+        );
+    """)
+
+def database_create_github_repo(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS 
+        GIT_REPOS (
+            ID INTEGER PRIMARY KEY, 
+            NAME TEXT, 
+            CREATED_AT TEXT,
+            UPDATED_AT TEXT,
+            LANGUAGES TEXT,
+            TECHNOLOGIES TEXT,
+            REPO_DESCRIPTION TEXT,
+            REPO_README TEXT,
+            EXPLAINER_TXT TEXT,
+            COMMIT_CNT INTEGER
+        );
+    """)
 #endregion
 
 #region Insert data
@@ -106,6 +131,47 @@ def database_insert_vec(con, cur, data):
         """
         INSERT OR IGNORE INTO VECS (ID, EMBEDDING) 
         VALUES (?, ?);
+        """, 
+        data
+    )
+    con.commit()
+
+def database_insert_github_user(con, cur, data):
+    cur.execute(
+        """
+        INSERT OR REPLACE 
+        INTO 
+        GIT_USER (
+            USERNAME, 
+            LANGUAGE_COUNT,
+            TECHNOLOGIES,
+            REPO_EXPLAINERS,
+            REPOS_SUMMARY
+        ) 
+        VALUES (?, ?, ?, ?, ?);
+        """, 
+        data
+    )
+    con.commit()
+    
+def database_insert_github_repo(con, cur, data):
+    cur.execute(
+        """
+        INSERT OR REPLACE 
+        INTO 
+        GIT_REPOS (
+            ID, 
+            NAME, 
+            CREATED_AT,
+            UPDATED_AT,
+            LANGUAGES,
+            TECHNOLOGIES,
+            REPO_DESCRIPTION,
+            REPO_README,
+            EXPLAINER_TXT,
+            COMMIT_CNT
+        ) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, 
         data
     )
