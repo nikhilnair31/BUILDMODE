@@ -66,6 +66,8 @@ def database_create_tweet_dump(cur):
         );
     """)
 
+def database_create_github():
+    pass
 #endregion
 
 #region Insert data

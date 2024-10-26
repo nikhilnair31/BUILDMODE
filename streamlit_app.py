@@ -4,6 +4,7 @@ from db import database_init, database_select_vec
 from api import replicate_init, replicate_embedding, anthropic_init, anthropic_chat
 from helper import serialize_f32
 from scrape_twitter import scrape_twitter_func
+from scrape_github import scrape_github_func
 from start_embeddings import set_embdedding_func
 
 messages = []
@@ -71,8 +72,8 @@ def chat_page():
         st.chat_message(msg["role"]).write(msg["content"])
 
     if query := st.chat_input():
-        if "anthropic_api_key" not in st.session_state["api_keys"]:
-            st.info("Please add your Anthropic API key to continue.")
+        if "api_keys" not in st.session_state:
+            st.info("Please add your API key to continue.")
             st.stop()
         
         system_context = system
@@ -89,9 +90,9 @@ def chat_page():
         st.session_state.messages.append({"role": "user", "content": query})
         st.chat_message("user").write(query)
         response = anthropic_chat(
-            anthropic_client, 
-            system_context, 
-            st.session_state.messages
+            client = anthropic_client, 
+            messages = st.session_state.messages,
+            system = system_context, 
         )
         st.session_state.messages.append({"role": "assistant", "content": response})
         assistant_msg = st.chat_message("assistant")
@@ -103,6 +104,10 @@ def chat_page():
 # Define a function for the Scraping page
 def scraping_page():
     st.title("SCRAPE")
+
+    sync_github = st.button("Sync GitHub")
+    if sync_github:
+        scrape_github_func(con, cur)
 
     sync_twitter = st.button("Sync Twitter")
     if sync_twitter:

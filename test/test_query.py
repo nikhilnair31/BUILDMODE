@@ -29,4 +29,8 @@ rows = cur.execute(
 ).fetchall()
 # print_select_rows(rows)
 
-anthropic_chat(anthropic_client, query, rows)
+anthropic_chat(
+    client = anthropic_client, 
+    messages = rows,
+    system = query 
+)
