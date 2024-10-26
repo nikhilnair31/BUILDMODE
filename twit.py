@@ -28,40 +28,45 @@ def clean_tweet_dump_data(tweets_str):
     
     tweets = json.loads(tweets_str)
     for tweet in tweets:
+        # print(f'tweet\n{tweet}')
+
         tweet_id = tweet["id"]
         
-        created_at_datetime = tweet["created_at"]
-        final_created_at_datetime = created_at_datetime
+        created_at = tweet["created_at"]
+        final_created_at = created_at
+
+        poster_username = tweet["_data"]["core"]["user_results"]["result"]["legacy"]["screen_name"]
+        final_poster_username = poster_username
         
         #TODO: See why full text is incomplete
         full_text = tweet["full_text"].strip()
         full_text_wo_rt = re.sub(r'RT @\w+:', '', full_text)
         full_text_wo_url = re.sub(r'http\S+', '', full_text_wo_rt)
-        final_text = full_text_wo_url
+        final_full_text = full_text_wo_url
         
         media = tweet["media"]
         media_str = json.dumps(media)
         final_media = media_str
         
-        media_content_urls = [media_item["media_url_https"] for media_item in media] if media else "-"
-        media_content_urls_str = ' | '.join(media_content_urls)
-        final_content_urls = media_content_urls_str
-        
         media_post_urls = [media_item["expanded_url"] for media_item in media] if media else "-"
         media_post_urls_str = ' | '.join(media_post_urls)
         final_post_urls = media_post_urls_str
+        
+        media_content_urls = [media_item["media_url_https"] for media_item in media] if media else "-"
+        media_content_urls_str = ' | '.join(media_content_urls)
+        final_content_urls = media_content_urls_str
 
         cleaned_tweets.append(
             (
                 tweet_id,
-                final_created_at_datetime,
-                final_text,
-                final_media,
+                final_created_at,
+                final_poster_username,
+                final_full_text,
                 final_post_urls,
                 final_content_urls
             )
         )
-    
+
     return cleaned_tweets
 
 # Initialize twitter client

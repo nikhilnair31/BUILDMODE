@@ -2,21 +2,9 @@ import json
 import struct
 from typing import List
 
+# Serializes a list of floats into a compact "raw bytes" format
 def serialize_f32(vector: List[float]) -> bytes:
-    """serializes a list of floats into a compact "raw bytes" format"""
     return struct.pack("%sf" % len(vector), *vector)
-
-def print_select_rows(rows):
-    idx = 1
-    for row in rows:
-        print(
-            f'idx: {idx} - id: {row[0]}',
-            f'text: {row[1]}',
-            f'urls: {row[2]}',
-            f'-------------------------------------------------------',
-            sep='\n'
-        )
-        idx += 1
 
 # Function to automatically remove non-serializable attributes
 def serialize_clean(tweet):
@@ -29,3 +17,15 @@ def serialize_clean(tweet):
         except (TypeError, OverflowError):
             pass  # Skip non-serializable fields
     return clean_data
+
+def print_select_rows(rows):
+    idx = 1
+    for row in rows:
+        print(
+            f'idx: {idx} - id: {row[0]}',
+            f'text: {row[1]}',
+            f'urls: {row[2]}',
+            f'-------------------------------------------------------',
+            sep='\n'
+        )
+        idx += 1

@@ -47,11 +47,11 @@ def database_create_tweets(cur):
         CREATE TABLE IF NOT EXISTS 
         TWEETS (
             ID INTEGER PRIMARY KEY, 
-            CREATED_AT_DATETIME TEXT, 
-            FULL_TEXT TEXT, 
-            MEDIA TEXT,
-            MEDIA_POST_URL TEXT,
-            MEDIA_CONTENT_URL TEXT
+            CREATED_AT TEXT, 
+            POSTER_USERNAME TEXT,
+            FULL_TEXT TEXT,
+            MEDIA_POST_URLS TEXT,
+            MEDIA_CONTENT_URLS TEXT
         );
     """)
 
@@ -83,7 +83,16 @@ def database_insert_dump_data(con, cur, data):
 def database_insert_data(con, cur, data):
     cur.execute(
         """
-        INSERT OR IGNORE INTO TWEETS (ID, CREATED_AT_DATETIME, FULL_TEXT, MEDIA, MEDIA_POST_URL, MEDIA_CONTENT_URL) 
+        INSERT OR IGNORE 
+        INTO 
+        TWEETS (
+            ID, 
+            CREATED_AT,
+            POSTER_USERNAME,
+            FULL_TEXT, 
+            MEDIA_POST_URLS, 
+            MEDIA_CONTENT_URLS
+        ) 
         VALUES (?, ?, ?, ?, ?, ?);
         """, 
         data
@@ -105,7 +114,12 @@ def database_insert_vec(con, cur, data):
 #region Select data
 
 def database_select_tweet_dump(cur):
-    cur.execute('''SELECT * FROM TWEET_DUMP''')
+    cur.execute(
+        f'''
+        SELECT * 
+        FROM TWEET_DUMP
+        '''
+    )
     output = cur.fetchall()
     
     return output
@@ -140,5 +154,32 @@ def database_select_vec(cur, query_vec_serialized, cnt):
     rows = cur.fetchall()
     
     return rows
+
+def database_select_tweet_wo_media(cur):
+    cur.execute(
+        f'''
+        SELECT POSTER_USERNAME, ID
+        FROM TWEETS
+        WHERE MEDIA_CONTENT_URLS = "-"
+        '''
+    )
+    output = cur.fetchall()
+    
+    return output
+
+#endregion
+
+#region Update data
+
+def database_update_data(cur):
+    cur.execute(
+        """
+        UPDATE TWEETS
+        SET FULL_TEXT = ? AND MEDIA_CONTENT_URLS = ?
+        WHERE ID = ?;
+        """, 
+        data
+    )
+    con.commit()
 
 #endregion
