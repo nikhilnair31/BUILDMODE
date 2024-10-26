@@ -11,6 +11,10 @@ def clean_data(tweet_data):
         
     media_content_urls = [media_item["media_url_https"] for media_item in media] if media else "-"
     media_content_urls_str = ' | '.join(media_content_urls)
+
+    # TODO: Update this to run the quoted tweet through the scraper and insert
+    if tweet_data["legacy"]["is_quote_status"] == True:
+        quoted_post_url = tweet_data["legacy"]["quoted_status_permalink"]["expanded"]
     
     return (full_text, media_content_urls_str)
 
@@ -56,10 +60,11 @@ def scrape_tweet(url: str) -> dict:
             for xhr in tweet_calls:
                 data = xhr.json()
                 result = data['data']['tweetResult']['result']
+                print(f"result: {result}")
                 clean_result = clean_data(result)
                 return clean_result
         finally:
             browser.close()
-
+    
 if __name__ == "__main__":
     print(scrape_tweet("https://x.com/emmettshine/status/1849458044830089470"))

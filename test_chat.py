@@ -3,7 +3,7 @@ import streamlit as st
 from db import database_init, database_select_vec
 from api import replicate_init, replicate_embedding, anthropic_init, anthropic_chat
 from helper import serialize_f32
-from scrape_twitter import scrape_twitter_func, update_twitter_data_wo_media_func
+from scrape_twitter import scrape_twitter_func
 from start_embeddings import set_embdedding_func
 
 messages = []
@@ -107,10 +107,7 @@ def scraping_page():
     sync_twitter = st.button("Sync Twitter")
     if sync_twitter:
         asyncio.run(scrape_twitter_func(con, cur))
-
-    update_data_wo_media = st.button("Update Data without Media")
-    if update_data_wo_media:
-        update_twitter_data_wo_media_func(con, cur)
+        # scraping_to_update_data_wo_media()
 
     load_data = st.button("Load Data")
     if load_data:
