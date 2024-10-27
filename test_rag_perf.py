@@ -6,8 +6,7 @@ from api import (
     replicate_embedding
 )
 from helper import (
-    serialize_f32,
-    print_select_rows
+    serialize_f32
 )
 
 con, cur = database_init()

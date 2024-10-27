@@ -18,15 +18,3 @@ def serialize_clean(tweet):
         except (TypeError, OverflowError):
             pass  # Skip non-serializable fields
     return clean_data
-
-def print_select_rows(rows):
-    idx = 1
-    for row in rows:
-        print(
-            f'idx: {idx} - id: {row[0]}',
-            f'text: {row[1]}',
-            f'urls: {row[2]}',
-            f'-------------------------------------------------------',
-            sep='\n'
-        )
-        idx += 1

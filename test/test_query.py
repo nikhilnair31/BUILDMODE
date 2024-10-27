@@ -1,6 +1,6 @@
 from api import replicate_embedding, openai_chat, anthropic_chat
 from db import database_init
-from helper import serialize_f32, print_select_rows
+from helper import serialize_f32
 
 con, cur = database_init()
 
@@ -24,7 +24,17 @@ rows = cur.execute(
     """,
     [serialize_f32(query_vec)],
 ).fetchall()
-# print_select_rows(rows)
+
+idx = 1
+for row in rows:
+    print(
+        f'idx: {idx} - id: {row[0]}',
+        f'text: {row[1]}',
+        f'urls: {row[2]}',
+        f'-------------------------------------------------------',
+        sep='\n'
+    )
+    idx += 1
 
 anthropic_chat(
     model = "claude-3-5-sonnet-20241022",
