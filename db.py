@@ -223,6 +223,18 @@ def database_select_vec(cur, query_vec_serialized, cnt):
     
     return rows
 
+def database_select_tweet_w_id(cur, id):
+    cur.execute(
+        f'''
+        SELECT MEDIA_POST_URLS, FULL_TEXT
+        FROM TWEETS
+        WHERE ID = {id}
+        '''
+    )
+    output = cur.fetchone()
+    
+    return output
+
 def database_select_tweet_wo_media(cur):
     cur.execute(
         f'''

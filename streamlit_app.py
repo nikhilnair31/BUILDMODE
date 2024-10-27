@@ -1,9 +1,12 @@
+import re
 import time
 import asyncio
 import streamlit as st
+from urllib.parse import quote_plus
 from db import (
     database_init, 
     database_select_vec, 
+    database_select_tweet_w_id,
     database_select_github_user
 )
 from api import (
@@ -25,41 +28,20 @@ messages = []
 system = f"""
     You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
 
-    Primary Mission: IDEATION SPECIALIST
-
-    Analyze user's social media content to understand their interests, expertise, and potential
-    Transform patterns in their content into creative product opportunities
-    Maintain an encouraging, collaborative tone as their ideation partner
+    Tasks:
+    - Analyze the user's social media post content to understand their interests 
+    - Transform patterns in these posts into creative product opportunities
+    - Utilize the user's Github profile and repositories to identify their skillset and experience
 
     When Ideating:
-
-    Always start by highlighting specific references from their social media that inspire ideas and provide the ID for the post
-    Present exactly 3 unique concepts that align with their demonstrated interests
-    Frame each idea in an exciting, actionable way: "Based on your posts about X, you could build Y"
-    Include market potential for each suggestion
-    Note potential challenges and solutions
-
-    Key Approaches:
-
-    Ideation Phase:
-    Distill complex information into clear, high-potential concepts
-    Focus on innovation gaps and market opportunities
-    Consider technical feasibility and resource requirements
-
-    Development Support:
-    Break down large projects into manageable milestones
-    Suggest specific tools and technologies
-    Provide risk assessment and mitigation strategies
-
-    Market Intelligence:
-    Analyze competitor landscapes
-    Identify target audience segments
-    Track relevant industry trends
-    Evaluate monetization strategies
+    - Always directly reference the exact social media posts that inspire the ideas proposed. Input format of social posts is (ID, POST_CONTENT, POST_IMAGE_URLS) so return the IDs of the inspiration posts. 
+    - Present exactly 1 unique concept that align with their posts and interests
+    - Include market potential and potential challenges for each suggestion
 
     Communication Style:
-    Use relevant examples and case studies
-    Ask clarifying questions when needed
+    - Use relevant examples and case studies
+    - Ask clarifying questions when needed
+    - Respond in markdown format
 """
 
 con, cur = database_init()
@@ -87,28 +69,29 @@ def chat_page():
             st.info("Please add your API key to continue.")
             st.stop()
         
-        system_context = system
-        if len(st.session_state.messages) == 1:
-            input_dict = {"modality": "text", "text_input": query}
-            query_vec = replicate_embedding(replicate_client, input_dict)
-            query_vec_serialized = [serialize_f32(query_vec)]
-            
-            similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
-            github_user_rows = database_select_github_user(cur)
-            system_context += f'''
-                User's Github Profile and Repos Data:
-                {str(github_user_rows)}
-
-                User's Social Media Content:
-                {str(similar_tweets_rows)}
-            '''
-            # print(f'system_context\n{system_context}')
+        input_dict = {"modality": "text", "text_input": query}
+        query_vec = replicate_embedding(replicate_client, input_dict)
+        query_vec_serialized = [serialize_f32(query_vec)]
+        
+        similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
+        github_user_rows = database_select_github_user(cur)
 
         anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
-        st.session_state.messages.append({"role": "user", "content": query})
+        st.session_state.messages.append({
+            "role": "user", 
+            "content": f'''
+                User's Social Media Posts:
+                {str(similar_tweets_rows)}
+
+                User's Github Profile and Repositories:
+                {str(github_user_rows)}
+
+                User's Query:
+                {query}
+            '''
+        })
         st.chat_message("user").write(query)
         
-        #FIXME: Show message getting streamed in the UI
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
@@ -116,7 +99,7 @@ def chat_page():
                 response = anthropic_chat(
                     client = anthropic_client, 
                     messages = st.session_state.messages,
-                    system = system_context, 
+                    system = system, 
                 )
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 assistant_response = response
@@ -125,11 +108,26 @@ def chat_page():
                     full_response += chunk + " "
                     # Add a blinking cursor to simulate typing
                     message_placeholder.markdown(full_response + "▌")
-                    time.sleep(0.01)
+                    time.sleep(0.03)
                     message_placeholder.markdown(full_response)
 
-            #TODO: Figure out how to pull URL from response
-            st.link_button("Go to post", "https://x.com/i/bookmarks")
+            pattern = r"\b\d{19}\b"
+            matches = re.findall(pattern, full_response)
+            columns = st.columns(len(matches), vertical_alignment="bottom")
+
+            for idx, match in enumerate(matches):
+                post_data = database_select_tweet_w_id(cur, match)
+                post_url, post_text = post_data
+
+                with columns[idx]:
+                    if post_url != "-":
+                        post_urls = post_url.split(" | ")
+                        for post_url in post_urls:
+                            st.link_button("Go to post", post_url)
+                    else:
+                        formatted_post_text = quote_plus(post_text)
+                        google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
+                        st.link_button("Go to post", google_search_url)
 
 # Define a function for the Scraping page
 def scraping_page():
