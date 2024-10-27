@@ -30,7 +30,7 @@ def database_init():
 
 #endregion
 
-#region Create tables     
+#region Create tables
 
 def database_create_vec(cur):
     cur.execute("""

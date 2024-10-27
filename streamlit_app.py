@@ -120,17 +120,20 @@ def chat_page():
 
             for idx, match in enumerate(matches):
                 post_data = database_select_tweet_w_id(cur, match)
-                post_url, post_text = post_data
-
-                with columns[idx]:
-                    if post_url != "-":
-                        post_urls = post_url.split(" | ")
-                        for post_url in post_urls:
-                            st.link_button(label="Go to post", icon="🔗", url=post_url)
-                    else:
-                        formatted_post_text = quote_plus(post_text)
-                        google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
-                        st.link_button(label="Go to post", icon="🔗", url=google_search_url)
+                
+                if post_data:
+                    post_url, post_text = post_data
+                    with columns[idx]:
+                        if post_url != "-":
+                            post_urls = post_url.split(" | ")
+                            for post_url in post_urls:
+                                st.link_button(label="", icon=":material/open_in_new:", url=post_url)
+                        else:
+                            formatted_post_text = quote_plus(post_text)
+                            google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
+                            st.link_button(label="", icon=":material/open_in_new:", url=google_search_url)
+                else:
+                    continue
 
 # Define a function for the Scraping page
 def scraping_page():

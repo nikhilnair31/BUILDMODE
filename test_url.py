@@ -5,72 +5,66 @@ from db import database_init, database_select_tweet_w_id
 con, cur = database_init()
 
 text = f'''
-    Based on your social media posts and GitHub activity, I can see you have a strong interest in game development, particularly in unique combat mechanics, physics-based gameplay, and roguelite elements. Let me propose 3 concepts that align with your experience in C# and Unity/Unreal while incorporating your interest in absurd shooter mechanics.
+    I'll analyze more patterns from your social media activity and GitHub projects to suggest 3 more innovative ideas:
 
-    1. "Solar Surfer" - Physics-Based Solar Roguelite
-    Inspired by posts: 1776042931054432438, 1847835596569350340
+1. AI-Powered Game Level Curator
+Inspired by posts: 1833923607678124093, 1831819479908823372, 1812322445191467339
 
-    Concept:
+A platform that:
 
-    Play as a tiny maintenance robot surfing on solar flares using physics-based movement
-    Use the sun's plasma as both weapon and movement mechanic - surf on waves, redirect solar flares at enemies
-    Each run has you diving deeper into the sun's layers, with different physics properties and hazards
-    Market Potential:
+Analyzes game level designs and provides insights on flow, difficulty, and engagement
+Suggests improvements based on successful level patterns
+Includes a community feature for sharing and rating level designs
+Uses AI to generate level layouts based on successful patterns
+Market Potential: Level design tools are crucial for both indie and professional game developers, with growing demand for AI-assisted design tools.
 
-    Unique setting differentiates from typical space/sci-fi roguelites
-    Physics-based gameplay appeals to fans of games like Totally Accurate Battle Simulator
-    Could tap into both roguelite and physics puzzle game markets
-    Challenges:
+Challenges:
 
-    Complex physics system needs careful balancing
-    Visual clarity in an all-bright environment
-    Performance optimization for particle effects
-    2. "Helios Heist" - Tactical Sun-Based Combat
-    Inspired by posts: 1812192143429013566, 1756511109702422899
+Creating accurate analysis algorithms
+Handling different game genres
+Ensuring generated suggestions are practical
+2. Developer Workflow Assistant
+Inspired by posts: 1835000228979651037, 1827668685319719691, 1816092188859580694
 
-    Concept:
+A tool that combines:
 
-    You're a space bandit stealing energy from the sun
-    Use solar-powered weapons that overheat intentionally for critical hits
-    Each run involves managing heat levels - weapons become more powerful but more unstable as they heat up
-    Random equipment malfunctions create chaotic moments
-    Market Potential:
+Smart code snippet management
+AI-powered documentation generation
+Project organization templates
+Integration with popular IDEs and Cursor
+Automated workflow suggestions based on coding patterns
+Market Potential: Developer productivity tools are in high demand, especially those that integrate AI capabilities.
 
-    Appeals to fans of risk/reward gameplay mechanics
-    Humorous take on serious sci-fi setting
-    Room for interesting weapon/equipment combinations
-    Challenges:
+Challenges:
 
-    Balancing risk/reward mechanics
-    Making heat management fun rather than tedious
-    Designing varied content for multiple runs
-    3. "Corona Corps" - Co-op Sun Defense
-    Inspired by posts: 1810342787025367389, 1831819479908823372
+Creating seamless IDE integrations
+Building an intuitive UX for developers
+Maintaining security with code-related features
+3. Real-time Game Analytics Visualizer
+Inspired by posts: 1829515703638224952, 1810149568861900859, 1840593270696443991
 
-    Concept:
+A platform for indie game developers that:
 
-    Defend solar collection stations from waves of sun-dwelling creatures
-    Each player controls a different specialized mech with unique cooling systems
-    Roguelite progression through unlocking new mech parts and cooling methods
-    Absurd twist: enemies are sentient solar flares wearing tiny hats
-    Market Potential:
+Provides real-time player behavior analytics
+Visualizes heat maps of player activity
+Identifies potential game balance issues
+Suggests optimizations based on player patterns
+Integrates with Steam and other platforms
+Market Potential: Growing indie game market needs accessible analytics tools that are typically only available to larger studios.
 
-    Co-op roguelites have proven popular (Risk of Rain 2, Gunfire Reborn)
-    Silly aesthetic could build community through memes/clips
-    Room for cosmetic DLC and regular content updates
-    Challenges:
+Challenges:
 
-    Networking complexity for co-op play
-    Balancing for both solo and multiplayer
-    Creating enough enemy variety
-    Based on your GitHub profile showing strong C# experience and game development projects like GLITCH, any of these concepts would be within your technical capabilities while pushing into new creative territory. The physics-based "Solar Surfer" might be particularly interesting given your experience with combat systems and particle effects.
-
-    Would you like me to elaborate on any of these concepts or discuss specific technical implementation approaches?
+Processing large amounts of real-time data
+Creating meaningful visualizations
+Building platform integrations
+These ideas align well with your technical background in C# and game development, plus your experience with AWS Lambda and AI integration shown in your GitHub repositories. Would you like me to elaborate on any of these concepts?
 '''
 pattern = r"\b\d{19}\b"
 matches = re.findall(pattern, text)
 
 for match in matches:
+    print(f'-----------------------------------------------')
+    print(f'match: {match}')
     post_data = database_select_tweet_w_id(cur, match)
     print(f'post_data: {post_data}')
     post_url, post_text = post_data
