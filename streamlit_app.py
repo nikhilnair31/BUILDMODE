@@ -1,3 +1,4 @@
+import time
 import asyncio
 import streamlit as st
 from db import (
@@ -106,17 +107,29 @@ def chat_page():
         anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
         st.session_state.messages.append({"role": "user", "content": query})
         st.chat_message("user").write(query)
-        response = anthropic_chat(
-            client = anthropic_client, 
-            messages = st.session_state.messages,
-            system = system_context, 
-        )
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        assistant_msg = st.chat_message("assistant")
-        assistant_msg.markdown(response)
+        
+        #FIXME: Show message getting streamed in the UI
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            with st.spinner('Thinking...'):
+                response = anthropic_chat(
+                    client = anthropic_client, 
+                    messages = st.session_state.messages,
+                    system = system_context, 
+                )
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                assistant_response = response
 
-        #TODO: Figure out how to pull URL from response
-        assistant_msg.link_button("Go to post", "https://x.com/i/bookmarks")
+                for chunk in assistant_response.split(" "):
+                    full_response += chunk + " "
+                    # Add a blinking cursor to simulate typing
+                    message_placeholder.markdown(full_response + "▌")
+                    time.sleep(0.01)
+                    message_placeholder.markdown(full_response)
+
+            #TODO: Figure out how to pull URL from response
+            st.link_button("Go to post", "https://x.com/i/bookmarks")
 
 # Define a function for the Scraping page
 def scraping_page():
@@ -140,6 +153,7 @@ def settings_page():
     st.title("SETTINGS")
     
     load_session_state()
+    save_session_state()
 
     # Save API keys in session state
     if "api_keys" not in st.session_state:
