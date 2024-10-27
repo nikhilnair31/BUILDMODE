@@ -35,7 +35,8 @@ system = f"""
 
     When Ideating:
     - Always directly reference the exact social media posts that inspire the ideas proposed. Input format of social posts is (ID, POST_CONTENT, POST_IMAGE_URLS) so return the IDs of the inspiration posts. 
-    - Present exactly 1 unique concept that align with their posts and interests
+    - Present exactly top 3 unique concept that align with their posts and interests
+    - Provide a single paragraph for each idea then elaborate if the user needs more details
     - Include market potential and potential challenges for each suggestion
 
     Communication Style:
@@ -52,6 +53,7 @@ def chat_page():
     st.title("BUILDMODE")
 
     with st.sidebar:
+        # TODO: Make this pick actually change provider used
         st.radio(
             "Pick the LLM model",
             ["Anthropic", "OpenAI"]
@@ -76,6 +78,7 @@ def chat_page():
         similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
         github_user_rows = database_select_github_user(cur)
 
+        # FIXME: Refactor code below
         anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
         st.session_state.messages.append({
             "role": "user", 
@@ -123,11 +126,11 @@ def chat_page():
                     if post_url != "-":
                         post_urls = post_url.split(" | ")
                         for post_url in post_urls:
-                            st.link_button("Go to post", post_url)
+                            st.link_button(label="Go to post", icon="🔗", url=post_url)
                     else:
                         formatted_post_text = quote_plus(post_text)
                         google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
-                        st.link_button("Go to post", google_search_url)
+                        st.link_button(label="Go to post", icon="🔗", url=google_search_url)
 
 # Define a function for the Scraping page
 def scraping_page():
