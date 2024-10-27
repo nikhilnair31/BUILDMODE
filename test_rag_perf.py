@@ -33,10 +33,19 @@ def database_select_vec(cur, query_vec_serialized, cnt):
 if __name__ == '__main__':
     query = 'tamagochi mecha'
     
-    input_dict = {"inputs": query}
-    query_vec = replicate_embedding(input_dict)[0]["embedding"]
+    # query_vec = replicate_embedding(
+    #     "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+    #     {"modality": "text", "text_input": query}
+    # )
+    query_vec = replicate_embedding(
+        "andreasjansson/clip-features:75b33f253f7714a281ad3e9b28f63e3232d583716ef6718f2e46641077ea040a",
+        {"inputs": query}
+    )
+    query_vec = query_vec[0]["embedding"]
+
     query_vec_serialized = [serialize_f32(query_vec)]
     count = 10
     
     similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
-    print(similar_tweets_rows)
+    for row in similar_tweets_rows:
+        print(f'{row[0]} - {row[1][:50]}...')

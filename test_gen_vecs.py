@@ -46,19 +46,22 @@ def run(output):
     for row in output: 
         try:
             embedding_vec = []
-            input_dict = {}
 
             tweet_id, tweet_text, tweet_img_url = row
             print(f'{tweet_id} | {tweet_text[:25]}... | {tweet_img_url[:25]}...')
             
             if tweet_img_url == '-':
-                input_dict = {"inputs": tweet_text}
-                embedding = replicate_embedding(input_dict)[0]["embedding"]
+                embedding = replicate_embedding(
+                    "andreasjansson/clip-features:75b33f253f7714a281ad3e9b28f63e3232d583716ef6718f2e46641077ea040a",
+                    {"inputs": tweet_text}
+                )[0]["embedding"]
                 embedding_vec.append(embedding)
             else:
                 for media_url in tweet_img_url.split(' | '):
-                    input_dict = {"inputs": media_url}
-                    vec = replicate_embedding(input_dict)[0]["embedding"]
+                    vec = replicate_embedding(
+                        "andreasjansson/clip-features:75b33f253f7714a281ad3e9b28f63e3232d583716ef6718f2e46641077ea040a",
+                        {"inputs": media_url}
+                    )[0]["embedding"]
                     embedding_vec.append(vec)
             
             print(f'shape of embedding_vec: {np.shape(embedding_vec)}')
