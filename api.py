@@ -18,11 +18,11 @@ def replicate_init():
         st.stop()
 
     return replicate.Client(api_token = REPLICATE_API_KEY)
-def replicate_embedding(input_dict):
+def replicate_embedding(model, input_dict):
     client = replicate_init()
 
     output_embedding_vec = client.run(
-        "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+        model,
         input = input_dict
     )
     

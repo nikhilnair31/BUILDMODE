@@ -5,22 +5,25 @@ from api import replicate_embedding
 
 def set_embdedding_func(con, cur):
     output = database_select_tweet(cur)
-    # print(f'output shape: {np.shape(output)}')
 
     for row in output: 
         try:
             embedding_vec = []
             input_dict = {}
 
-            tweet_id, _, tweet_text, _, _, tweet_img_url = row
+            tweet_id, tweet_text, tweet_img_url = row
             
             if tweet_img_url == '-':
-                input_dict = {"modality": "text", "text_input": tweet_text}
-                embedding_vec = replicate_embedding(input_dict)
+                embedding_vec = replicate_embedding(
+                    "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+                    {"modality": "text", "text_input": tweet_text}
+                )
             else:
-                for media in tweet_img_url.split(' | '):
-                    input_dict = {"modality": "vision", "input": media}
-                    vec = replicate_embedding(input_dict)
+                for media_url in tweet_img_url.split(' | '):
+                    vec = replicate_embedding(
+                        "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+                        input_dict = {"modality": "vision", "input": media_url}
+                    )
                     embedding_vec.append(vec)
             
             # Handle averaging if there are multiple vectors (e.g., multiple media files)

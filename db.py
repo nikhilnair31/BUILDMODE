@@ -195,7 +195,7 @@ def database_select_tweet_dump(cur):
 def database_select_tweet(cur):
     cur.execute(
         f"""
-        SELECT * 
+        SELECT ID, FULL_TEXT, MEDIA_CONTENT_URLS
         FROM TWEETS
         WHERE ID NOT IN (SELECT ID FROM VECS)
         """

@@ -71,14 +71,15 @@ def chat_page():
         st.chat_message(msg["role"]).write(msg["content"])
 
     if query := st.chat_input():
-        input_dict = {"modality": "text", "text_input": query}
-        query_vec = replicate_embedding(input_dict)
+        query_vec = replicate_embedding(
+            "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+            {"modality": "text", "text_input": query}
+        )
         query_vec_serialized = [serialize_f32(query_vec)]
         
         similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
         github_user_rows = database_select_github_user(cur)
 
-        # FIXME: Refactor code below
         st.session_state.messages.append({
             "role": "user", 
             "content": f'''
@@ -108,7 +109,7 @@ def chat_page():
                     )
                 elif llm_provider == "OpenAI":
                     response = openai_chat(
-                        model = "gpt-4o",
+                        model = "gpt-4o-mini",
                         messages = st.session_state.messages,
                         system = system
                     )
@@ -131,6 +132,7 @@ def chat_page():
                 create_link_buttons(col = columns[idx], data = post_data)
 
 # Define a function for the Scraping page
+# TODO: Find a way to load these into the relevant UI element
 def settings_page():
     st.title("SETTINGS")
     # load_session_state()
@@ -169,27 +171,18 @@ def settings_page():
         scrape_twitter_func(con, cur)
 
     st.divider()
-    
-    create_sync_section(
-        "Replicate Settings", 
-        [[("API Key", "replicate_api_key", "password")]]
-    )
-
-    if st.button("Load Data"):
-        set_embdedding_func(con, cur)
-
-    st.divider()
 
     create_sync_section(
         "LLM Settings", 
         [
-            [
-                ("Anthropic API Key", "anthropic_api_key", "password")
-            ],
-            [
-                ("OpenAI API Key", "openai_api_key", "password")
-            ]
-    ])
+            [("Anthropic API Key", "anthropic_api_key", "password")],
+            [("OpenAI API Key", "openai_api_key", "password")],
+            [("Replicate API Key", "replicate_api_key", "password")]
+        ]
+    )
+
+    if st.button("Run Emeddings"):
+        set_embdedding_func(con, cur)
 
     st.divider()
 
