@@ -1,25 +1,26 @@
 import os
+import json
 import replicate
 import anthropic
 from openai import OpenAI
 from dotenv import load_dotenv
+import streamlit as st
 
 load_dotenv()
 
-REPLICATE_API_KEY = os.getenv('REPLICATE_API_KEY')
-
 #region Replicate
 
-# Initialize Replicate client
 def replicate_init():
-    client = replicate.Client(
-        api_token = REPLICATE_API_KEY
-    )
-    
-    return client
+    REPLICATE_API_KEY = os.getenv('REPLICATE_API_KEY')
 
-# Generate Replicate embedding
-def replicate_embedding(client, input_dict):
+    if not REPLICATE_API_KEY:
+        st.error("Please add your Replicate API key to continue.")
+        st.stop()
+
+    return replicate.Client(api_token = REPLICATE_API_KEY)
+def replicate_embedding(input_dict):
+    client = replicate_init()
+
     output_embedding_vec = client.run(
         "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
         input = input_dict
@@ -31,29 +32,20 @@ def replicate_embedding(client, input_dict):
 
 #region OpenAI
 
-# Initialize OpenAI client
-def openai_init(llm_api_key):
-    client = OpenAI(
-        api_key = llm_api_key
-    )
-    
-    return client
+def openai_init():
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-# Generate OpenAI embedding
-def openai_embedding():
-    response = client.embeddings.create(
-        input="Your text string goes here",
-        model="text-embedding-3-small"
-    )
-    
-    embedding = response.data[0].embedding
-    print(f'embedding: {embedding}')
+    if not OPENAI_API_KEY:
+        st.error("Please add your OpenAI API key to continue.")
+        st.stop()
 
-    return embedding
+    return OpenAI(api_key = OPENAI_API_KEY)
+def openai_chat(model, messages, system = None):
+    # Only include 'system' if it's provided
+    if system is not None:
+        messages.insert(0, {"role": "system", "content": system})
 
-# Generate OpenAI chat completion
-def openai_chat(client, model, messages):
-    # Build the parameters dictionary
+    # Build the parameters dictionary dynamically
     params = {
         "model": model,
         "max_tokens": 8192,
@@ -61,6 +53,7 @@ def openai_chat(client, model, messages):
         "messages": messages
     }
 
+    client = openai_init()
     completion = client.chat.completions.create(**params)
     response = completion.choices[0].message.content
 
@@ -70,19 +63,18 @@ def openai_chat(client, model, messages):
 
 #region Anthropic
 
-# Initialize Anthropic client
-def anthropic_init(llm_api_key):
-    client = anthropic.Anthropic(
-        api_key =  llm_api_key
-    )
-    
-    return client
+def anthropic_init():
+    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
-# Generate Anthropic chat completion
-def anthropic_chat(client, messages, system = None):
+    if not ANTHROPIC_API_KEY:
+        st.error("Please add your Anthropic API key to continue.")
+        st.stop()
+
+    return anthropic.Anthropic(api_key = ANTHROPIC_API_KEY)
+def anthropic_chat(model, messages, system = None):
     # Build the parameters dictionary dynamically
     params = {
-        "model": "claude-3-5-sonnet-20241022",
+        "model": model,
         "max_tokens": 8192,
         "temperature": 1,
         "messages": messages
@@ -92,6 +84,7 @@ def anthropic_chat(client, messages, system = None):
     if system is not None:
         params["system"] = system
 
+    client = anthropic_init()
     completion = client.messages.create(**params)
     response = completion.content[0].text
     

@@ -2,7 +2,18 @@ import re
 import time
 import asyncio
 import streamlit as st
-from urllib.parse import quote_plus
+from scrape_twitter import scrape_twitter_func
+from scrape_github import scrape_github_func
+from start_embeddings import set_embdedding_func
+from saving import (
+    init_session_state,
+    save_session_state,
+    load_session_state
+)
+from ui import (
+    create_sync_section,
+    create_link_buttons
+)
 from db import (
     database_init, 
     database_select_vec, 
@@ -10,21 +21,14 @@ from db import (
     database_select_github_user
 )
 from api import (
-    replicate_init, 
     replicate_embedding, 
-    anthropic_init, 
-    anthropic_chat
+    anthropic_chat,
+    openai_chat
 )
 from helper import (
-    serialize_f32,
-    save_session_state,
-    load_session_state
+    serialize_f32
 )
-from scrape_twitter import scrape_twitter_func
-from scrape_github import scrape_github_func
-from start_embeddings import set_embdedding_func
 
-messages = []
 system = f"""
     You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
 
@@ -46,19 +50,19 @@ system = f"""
 """
 
 con, cur = database_init()
-replicate_client = replicate_init()
+init_session_state()
 
 # Define a function for the chat interface (default page)
 def chat_page():
     st.title("BUILDMODE")
+    st.divider()
 
+    # Default values for count and llm provider
+    count = 10
+    llm_provider = "Anthropic"
     with st.sidebar:
-        # TODO: Make this pick actually change provider used
-        st.radio(
-            "Pick the LLM model",
-            ["Anthropic", "OpenAI"]
-        )
-        count = st.slider("How many posts to reference?", 10, 200, 100)
+        count = st.slider("How many posts to reference?", 10, 200, 50)
+        llm_provider = st.radio("Pick the LLM model", ["Anthropic", "OpenAI"])
     
     if "messages" not in st.session_state:
         st.session_state["messages"] = [{"role": "assistant", "content": "What do you want to BUILD today?"}]
@@ -67,19 +71,14 @@ def chat_page():
         st.chat_message(msg["role"]).write(msg["content"])
 
     if query := st.chat_input():
-        if "api_keys" not in st.session_state:
-            st.info("Please add your API key to continue.")
-            st.stop()
-        
         input_dict = {"modality": "text", "text_input": query}
-        query_vec = replicate_embedding(replicate_client, input_dict)
+        query_vec = replicate_embedding(input_dict)
         query_vec_serialized = [serialize_f32(query_vec)]
         
         similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
         github_user_rows = database_select_github_user(cur)
 
         # FIXME: Refactor code below
-        anthropic_client = anthropic_init(st.session_state["api_keys"]["anthropic_api_key"])
         st.session_state.messages.append({
             "role": "user", 
             "content": f'''
@@ -99,11 +98,21 @@ def chat_page():
             message_placeholder = st.empty()
             full_response = ""
             with st.spinner('Thinking...'):
-                response = anthropic_chat(
-                    client = anthropic_client, 
-                    messages = st.session_state.messages,
-                    system = system, 
-                )
+                response = ""
+                
+                if llm_provider == "Anthropic":
+                    response = anthropic_chat(
+                        model = "claude-3-5-sonnet-20241022",
+                        messages = st.session_state.messages,
+                        system = system, 
+                    )
+                elif llm_provider == "OpenAI":
+                    response = openai_chat(
+                        model = "gpt-4o",
+                        messages = st.session_state.messages,
+                        system = system
+                    )
+                
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 assistant_response = response
 
@@ -114,77 +123,81 @@ def chat_page():
                     time.sleep(0.03)
                     message_placeholder.markdown(full_response)
 
-            pattern = r"\b\d{19}\b"
-            matches = re.findall(pattern, full_response)
+            # Extracting tweet IDs from a list of tweet IDs and generating link buttons 
+            matches = re.findall(r"\b\d{19}\b", full_response)
             columns = st.columns(len(matches), vertical_alignment="bottom")
-
             for idx, match in enumerate(matches):
                 post_data = database_select_tweet_w_id(cur, match)
-                
-                if post_data:
-                    post_url, post_text = post_data
-                    with columns[idx]:
-                        if post_url != "-":
-                            post_urls = post_url.split(" | ")
-                            for post_url in post_urls:
-                                st.link_button(label="", icon=":material/open_in_new:", url=post_url)
-                        else:
-                            formatted_post_text = quote_plus(post_text)
-                            google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
-                            st.link_button(label="", icon=":material/open_in_new:", url=google_search_url)
-                else:
-                    continue
+                create_link_buttons(col = columns[idx], data = post_data)
 
 # Define a function for the Scraping page
-def scraping_page():
-    st.title("SCRAPE")
-
-    sync_github = st.button("Sync GitHub")
-    if sync_github:
-        scrape_github_func(con, cur)
-
-    sync_twitter = st.button("Sync Twitter")
-    if sync_twitter:
-        asyncio.run(scrape_twitter_func(con, cur))
-        # scraping_to_update_data_wo_media()
-
-    load_data = st.button("Load Data")
-    if load_data:
-        set_embdedding_func(replicate_client, con, cur)
-
-# Define a function for the API keys input page
 def settings_page():
     st.title("SETTINGS")
+    # load_session_state()
     
-    load_session_state()
-    save_session_state()
+    create_sync_section(
+        "GitHub Settings", 
+        [
+            [
+                ("Username", "github_username", "text"), 
+                ("Access Token", "github_access_token", "text")
+            ]
+        ]
+    )
+    if st.button("Sync", key="sync_github2"):
+        scrape_github_func(con, cur)
 
-    # Save API keys in session state
-    if "api_keys" not in st.session_state:
-        st.session_state["api_keys"] = {"anthropic_api_key": "", "openai_key": ""}
+    st.divider()
+
+    create_sync_section(
+        "Twitter Settings", 
+        [
+            [
+                ("Twitter Screen Name", "twitter_screen_name", "text"), 
+                ("Twitter Username", "twitter_username", "text")
+            ],
+            [
+                ("Twitter Email", "twitter_email", "text"), 
+                ("Twitter Password", "twitter_password", "text")
+            ],
+            [(
+                "Twitter Rate Limit", "twitter_rate_limit", ("number", 10)), 
+                ("Twitter Reset Interval", "twitter_reset_interval", ("number", 20))
+            ]
+    ])
+    if st.button("Sync", key="sync_twitter2"):
+        scrape_twitter_func(con, cur)
+
+    st.divider()
     
-    # Initialize missing keys in the dictionary (if any)
-    if "anthropic_api_key" not in st.session_state["api_keys"]:
-        st.session_state["api_keys"]["anthropic_api_key"] = ""
-    if "openai_key" not in st.session_state["api_keys"]:
-        st.session_state["api_keys"]["openai_key"] = ""
-    
-    # Input fields for API keys
-    st.session_state["api_keys"]["anthropic_api_key"] = st.text_input(
-        "Anthropic API Key", value=st.session_state["api_keys"]["anthropic_api_key"],
-        type = "password"
+    create_sync_section(
+        "Replicate Settings", 
+        [[("API Key", "replicate_api_key", "password")]]
     )
-    st.session_state["api_keys"]["openai_key"] = st.text_input(
-        "OpenAI API Key", value=st.session_state["api_keys"]["openai_key"],
-        type = "password"
-    )
-    
-    # Save button
+
+    if st.button("Load Data"):
+        set_embdedding_func(con, cur)
+
+    st.divider()
+
+    create_sync_section(
+        "LLM Settings", 
+        [
+            [
+                ("Anthropic API Key", "anthropic_api_key", "password")
+            ],
+            [
+                ("OpenAI API Key", "openai_api_key", "password")
+            ]
+    ])
+
+    st.divider()
+
     if st.button("Save"):
         st.success("API keys saved!")
         save_session_state()
 
-# App name and icon
+# Set the page configuration
 st.set_page_config(
     page_title="BUILDMODE",
     page_icon="⚙️",
@@ -194,18 +207,11 @@ st.set_page_config(
         'About': "[Github](https://github.com/nikhilnair31/BUILDMODE)"
     }
 )
-
-# Navigation pages
 pg = st.navigation([
     st.Page(
         chat_page,
         title = "BUILDMODE",
         icon = "🤖"
-    ),
-    st.Page(
-        scraping_page,
-        title = "SCRAPE",
-        icon = "🔎"
     ),
     st.Page(
         settings_page,

@@ -3,23 +3,24 @@ import json
 import requests
 from dotenv import load_dotenv
 from api import (
-    openai_init, 
     openai_chat
 )
 
 load_dotenv()
 
-GITHUB_USERNAME = os.getenv('GITHUB_USERNAME')
-GITHUB_ACCESS_TOKEN = os.getenv('GITHUB_ACCESS_TOKEN')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-headers = {'Authorization': f'token {GITHUB_ACCESS_TOKEN}'}
-base_url = f'https://api.github.com/users/{GITHUB_USERNAME}'
-
 # Function to make a GitHub API request
 def make_github_request(url):
+    GITHUB_ACCESS_TOKEN = os.getenv('GITHUB_ACCESS_TOKEN')
+
+    if not GITHUB_ACCESS_TOKEN:
+        st.error("Please add your GitHub Access Token to continue.")
+        st.stop()
+
+    headers = {'Authorization': f'token {GITHUB_ACCESS_TOKEN}'}
+
     response = requests.get(url, headers=headers)
     response.raise_for_status()
+    
     return response.json()
 
 # Calculate Language Percentage
@@ -46,9 +47,7 @@ def summarize_projects(descriptions_list_txt):
     descriptions = descriptions_list_txt.split(' | ')
     for description in descriptions:
         if description:
-            openai_client = openai_init(OPENAI_API_KEY)
             response = openai_chat(
-                client = openai_client, 
                 model = "gpt-4o-mini",
                 messages = [
                     {
@@ -67,15 +66,28 @@ def summarize_projects(descriptions_list_txt):
 
 # Fetch Repos and Analyze
 def get_user_details():
+    GITHUB_USERNAME = os.getenv('GITHUB_USERNAME')
+
+    if not GITHUB_USERNAME:
+        st.error("Please add your GitHub Username to continue.")
+        st.stop()
+
     return GITHUB_USERNAME
 
 # Fetch Repos and Analyze
 def get_repo_details():
-    full_repo_data = []
+    GITHUB_USERNAME = os.getenv('GITHUB_USERNAME')
 
+    if not GITHUB_USERNAME:
+        st.error("Please add your GitHub Username to continue.")
+        st.stop()
+
+    base_url = f'https://api.github.com/users/{GITHUB_USERNAME}'
     repos = make_github_request(f'{base_url}/repos?per_page=1000')
     # print(f'repos\n{repos}\n')
 
+    full_repo_data = []
+    
     for repo in repos:
         # print(f'-----------------------------------')
         # print(f'repo: {repo}')
