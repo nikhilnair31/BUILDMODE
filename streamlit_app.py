@@ -7,9 +7,7 @@ from scrape_twitter import scrape_twitter_func
 from scrape_github import scrape_github_func
 from start_embeddings import set_embdedding_func
 from saving import (
-    init_session_state,
-    save_session_state,
-    load_session_state
+    update_env_file
 )
 from ui import (
     create_sync_section,
@@ -32,7 +30,6 @@ from helper import (
 )
 
 con, cur = database_init()
-# init_session_state()
 
 def init_sys():
     base_system = f"""
@@ -68,8 +65,8 @@ def chat_page():
     st.title("BUILDMODE")
 
     # Default values for count and llm provider
-    count = 10
-    llm_provider = "Anthropic"
+    # count = 10
+    # llm_provider = "Anthropic"
     with st.sidebar:
         count = st.slider("How many posts to reference?", 10, 200, 50)
         llm_provider = st.radio("Pick the LLM model", ["Anthropic", "OpenAI"])
@@ -82,83 +79,72 @@ def chat_page():
         ]
 
     for msg in st.session_state.messages:
-        st.chat_message(msg["role"]).write(msg["content"])
+        display_content = msg["content"]
+        # For user messages, extract only the query part
+        if msg["role"] == "user":
+            display_content = display_content.split("User's Query: ")[-1]
+        st.chat_message(msg["role"]).write(display_content)
 
     if query := st.chat_input():
-        response = openai_func_call(query)
-        tool_call = response.choices[0].message.tool_calls[0]
-        arguments = json.loads(tool_call.function.arguments)
-        query_text = arguments.get('query_text')
-
-        query_vec = replicate_embedding(
-            "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
-            {"modality": "text", "text_input": query_text}
-        )
-        query_vec_serialized = [serialize_f32(query_vec)]
+        similar_tweets_rows = []
         
-        similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
-        print(f'{similar_tweets_rows}')
+        response = openai_func_call(query)
+        tool_call = response.choices[0].message.tool_calls
+        if tool_call:
+            query = json.loads(tool_call[0].function.arguments).get('query_text')
+            query_vec = replicate_embedding(
+                "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+                {"modality": "text", "text_input": query}
+            )
+            query_vec_serialized = [serialize_f32(query_vec)]
+            similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
 
         st.session_state.messages.append({
             "role": "user", 
-            "content": f'''
-                Relevant Social Media Posts:
-                {str(similar_tweets_rows)}
-
-                User's Query:
-                {query}
-            '''
+            "content": f"Relevant Social Media Posts: {str(similar_tweets_rows)}\nUser's Query: {query}"
         })
         st.chat_message("user").write(query)
         
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_response = ""
             with st.spinner('Thinking...'):
-                response = ""
-                
-                if llm_provider == "Anthropic":
-                    response = anthropic_chat(
-                        model = "claude-3-5-sonnet-20241022",
-                        messages = st.session_state.messages,
-                        system = system_prompt, 
-                    )
-                elif llm_provider == "OpenAI":
-                    response = openai_chat(
-                        model = "gpt-4o-mini",
-                        messages = st.session_state.messages,
-                        system = system_prompt
-                    )
+                response = anthropic_chat(
+                    model="claude-3-5-sonnet-20241022",
+                    messages=st.session_state.messages,
+                    system=system_prompt
+                ) if llm_provider == "Anthropic" else openai_chat(
+                    model="gpt-4o-mini",
+                    messages=st.session_state.messages,
+                    system=system_prompt
+                )
                 
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 assistant_response = response
-
+                full_response = ""
                 for chunk in assistant_response.split(" "):
                     full_response += chunk + " "
-                    # Add a blinking cursor to simulate typing
                     message_placeholder.markdown(full_response + "▌")
                     time.sleep(0.03)
                     message_placeholder.markdown(full_response)
 
             # Extracting tweet IDs from a list of tweet IDs and generating link buttons 
             matches = re.findall(r"\b\d{19}\b", full_response)
-            columns = st.columns(len(matches), vertical_alignment="bottom")
-            for idx, match in enumerate(matches):
-                post_data = database_select_tweet_w_id(cur, match)
-                create_link_buttons(col = columns[idx], data = post_data)
+            if matches:
+                columns = st.columns(len(matches), vertical_alignment="bottom")
+                for idx, match in enumerate(matches):
+                    post_data = database_select_tweet_w_id(cur, match)
+                    create_link_buttons(col = columns[idx], data = post_data)
 
 # Define a function for the Scraping page
-# TODO: Find a way to load these into the relevant UI element
 def settings_page():
     st.title("SETTINGS")
-    # load_session_state()
     
     create_sync_section(
         "GitHub Settings", 
         [
             [
-                ("Username", "github_username", "text"), 
-                ("Access Token", "github_access_token", "password")
+                ("Username", "GITHUB_USERNAME", "text"), 
+                ("Access Token", "GITHUB_ACCESS_TOKEN", "password")
             ]
         ]
     )
@@ -172,16 +158,16 @@ def settings_page():
         "Twitter Settings", 
         [
             [
-                ("Twitter Screen Name", "twitter_screen_name", "text"), 
-                ("Twitter Username", "twitter_username", "text")
+                ("Twitter Screen Name", "USER_SCREEN_NAME", "text"), 
+                ("Twitter Username", "USERNAME", "text")
             ],
             [
-                ("Twitter Email", "twitter_email", "text"), 
-                ("Twitter Password", "twitter_password", "password")
+                ("Twitter Email", "EMAIL", "text"), 
+                ("Twitter Password", "PASSWORD", "password")
             ],
             [(
-                "Twitter Rate Limit", "twitter_rate_limit", ("number", 10)), 
-                ("Twitter Reset Interval", "twitter_reset_interval", ("number", 20))
+                "Twitter Rate Limit", "TWITTER_RATE_LIMIT", ("number", 10)), 
+                ("Twitter Reset Interval", "TWITTER_RESET_INTERVAL", ("number", 20))
             ]
     ])
     if st.button("Sync", key="sync_twitter2"):
@@ -193,13 +179,13 @@ def settings_page():
         "LLM Settings", 
         [
             [
-                ("Anthropic API Key", "anthropic_api_key", "password")
+                ("Anthropic API Key", "ANTHROPIC_API_KEY", "password")
             ],
             [
-                ("OpenAI API Key", "openai_api_key", "password")
+                ("OpenAI API Key", "OPENAI_API_KEY", "password")
             ],
             [
-                ("Replicate API Key", "replicate_api_key", "password")
+                ("Replicate API Key", "REPLICATE_API_KEY", "password")
             ]
         ]
     )
@@ -210,8 +196,10 @@ def settings_page():
     st.divider()
 
     if st.button("Save"):
-        st.success("API keys saved!")
-        save_session_state()
+        if update_env_file():
+            st.success("Settings saved successfully!")
+        else:
+            st.error("Failed to save settings. Please check the error message above.")
 
 # Set the page configuration
 st.set_page_config(

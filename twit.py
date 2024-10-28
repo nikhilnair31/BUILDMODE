@@ -8,8 +8,8 @@ from helper import serialize_clean
 
 load_dotenv()
 
-RATE_LIMIT = int(os.getenv('RATE_LIMIT'))
-RESET_INTERVAL = int(os.getenv('RESET_INTERVAL'))
+RATE_LIMIT = int(os.getenv('TWITTER_RATE_LIMIT'))
+RESET_INTERVAL = int(os.getenv('TWITTER_RESET_INTERVAL'))
 USER_SCREEN_NAME = os.getenv('USER_SCREEN_NAME')
 USERNAME = os.getenv('USERNAME')
 EMAIL = os.getenv('EMAIL')
