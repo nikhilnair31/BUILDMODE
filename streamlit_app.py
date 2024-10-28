@@ -1,5 +1,6 @@
 import re
 import time
+import json
 import asyncio
 import streamlit as st
 from scrape_twitter import scrape_twitter_func
@@ -23,39 +24,48 @@ from db import (
 from api import (
     replicate_embedding, 
     anthropic_chat,
-    openai_chat
+    openai_chat,
+    openai_func_call
 )
 from helper import (
     serialize_f32
 )
 
-system = f"""
-    You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
-
-    Tasks:
-    - Analyze the user's social media post content to understand their interests 
-    - Transform patterns in these posts into creative product opportunities
-    - Utilize the user's Github profile and repositories to identify their skillset and experience
-
-    When Ideating:
-    - Always directly reference the exact social media posts that inspire the ideas proposed. Input format of social posts is (ID, POST_CONTENT, POST_IMAGE_URLS) so return the IDs of the inspiration posts. 
-    - Present exactly top 3 unique concept that align with their posts and interests
-    - Provide a single paragraph for each idea then elaborate if the user needs more details
-    - Include market potential and potential challenges for each suggestion
-
-    Communication Style:
-    - Use relevant examples and case studies
-    - Ask clarifying questions when needed
-    - Respond in markdown format
-"""
-
 con, cur = database_init()
-init_session_state()
+# init_session_state()
+
+def init_sys():
+    base_system = f"""
+        You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
+
+        Tasks:
+        - Analyze the user's social media post content to understand their interests 
+        - Transform patterns in these posts into creative product opportunities
+        - Utilize the user's Github profile and repositories to identify their skillset and experience
+
+        When Ideating:
+        - Always directly reference the exact social media posts that inspire the ideas proposed. Input format of social posts is (ID, POST_CONTENT, POST_IMAGE_URLS) so return the IDs of the inspiration posts. 
+        - Present exactly top 3 unique concept that align with their posts and interests
+        - Provide a single paragraph for each idea then elaborate if the user needs more details
+        - Include market potential and potential challenges for each suggestion
+
+        Communication Style:
+        - Use relevant examples and case studies
+        - Ask clarifying questions when needed
+        - Respond in markdown format
+    """
+    github_user_rows = database_select_github_user(cur)
+    system_prompt = f'''
+        {base_system}
+
+        User's Github Profile and Repositories:
+        {str(github_user_rows)}
+    '''
+    return system_prompt
 
 # Define a function for the chat interface (default page)
 def chat_page():
     st.title("BUILDMODE")
-    st.divider()
 
     # Default values for count and llm provider
     count = 10
@@ -64,30 +74,36 @@ def chat_page():
         count = st.slider("How many posts to reference?", 10, 200, 50)
         llm_provider = st.radio("Pick the LLM model", ["Anthropic", "OpenAI"])
     
+    system_prompt = init_sys()
+
     if "messages" not in st.session_state:
-        st.session_state["messages"] = [{"role": "assistant", "content": "What do you want to BUILD today?"}]
+        st.session_state["messages"] = [
+            {"role": "assistant", "content": "What do you want to BUILD today?"}
+        ]
 
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
 
     if query := st.chat_input():
+        response = openai_func_call(query)
+        tool_call = response.choices[0].message.tool_calls[0]
+        arguments = json.loads(tool_call.function.arguments)
+        query_text = arguments.get('query_text')
+
         query_vec = replicate_embedding(
             "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
-            {"modality": "text", "text_input": query}
+            {"modality": "text", "text_input": query_text}
         )
         query_vec_serialized = [serialize_f32(query_vec)]
         
         similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
-        github_user_rows = database_select_github_user(cur)
+        print(f'{similar_tweets_rows}')
 
         st.session_state.messages.append({
             "role": "user", 
             "content": f'''
-                User's Social Media Posts:
+                Relevant Social Media Posts:
                 {str(similar_tweets_rows)}
-
-                User's Github Profile and Repositories:
-                {str(github_user_rows)}
 
                 User's Query:
                 {query}
@@ -105,13 +121,13 @@ def chat_page():
                     response = anthropic_chat(
                         model = "claude-3-5-sonnet-20241022",
                         messages = st.session_state.messages,
-                        system = system, 
+                        system = system_prompt, 
                     )
                 elif llm_provider == "OpenAI":
                     response = openai_chat(
                         model = "gpt-4o-mini",
                         messages = st.session_state.messages,
-                        system = system
+                        system = system_prompt
                     )
                 
                 st.session_state.messages.append({"role": "assistant", "content": response})
@@ -142,7 +158,7 @@ def settings_page():
         [
             [
                 ("Username", "github_username", "text"), 
-                ("Access Token", "github_access_token", "text")
+                ("Access Token", "github_access_token", "password")
             ]
         ]
     )
@@ -160,7 +176,7 @@ def settings_page():
             ],
             [
                 ("Twitter Email", "twitter_email", "text"), 
-                ("Twitter Password", "twitter_password", "text")
+                ("Twitter Password", "twitter_password", "password")
             ],
             [(
                 "Twitter Rate Limit", "twitter_rate_limit", ("number", 10)), 
@@ -175,9 +191,15 @@ def settings_page():
     create_sync_section(
         "LLM Settings", 
         [
-            [("Anthropic API Key", "anthropic_api_key", "password")],
-            [("OpenAI API Key", "openai_api_key", "password")],
-            [("Replicate API Key", "replicate_api_key", "password")]
+            [
+                ("Anthropic API Key", "anthropic_api_key", "password")
+            ],
+            [
+                ("OpenAI API Key", "openai_api_key", "password")
+            ],
+            [
+                ("Replicate API Key", "replicate_api_key", "password")
+            ]
         ]
     )
 
@@ -193,7 +215,7 @@ def settings_page():
 # Set the page configuration
 st.set_page_config(
     page_title="BUILDMODE",
-    page_icon="⚙️",
+    page_icon=":material/build:",
     layout="centered",
     initial_sidebar_state="expanded",
     menu_items={

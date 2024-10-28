@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 from api import (
     openai_chat
@@ -40,6 +41,12 @@ def calculate_language_percentage(language_count):
     sorted_perc = dict(sorted(language_percentage.items(), key=lambda item: item[1], reverse=True))
 
     return json.dumps(sorted_perc)
+
+# Calculate time spent per language based on the creation and update times
+def calculate_time_spent_per_language(created_at, updated_at, languages):
+    time_spent = (datetime.strptime(updated_at, "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")).total_seconds() / 3600
+    total_weight = sum(languages.values())
+    return {lang: round(time_spent * (weight / total_weight), 0) for lang, weight in languages.items()}
 
 # Generate Project Summaries using OpenAI
 def summarize_projects(descriptions_list_txt):

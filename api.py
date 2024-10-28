@@ -4,6 +4,7 @@ import replicate
 import anthropic
 from openai import OpenAI
 from dotenv import load_dotenv
+from helper import serialize_clean
 import streamlit as st
 
 load_dotenv()
@@ -57,6 +58,41 @@ def openai_chat(model, messages, system = None):
     completion = client.chat.completions.create(**params)
     response = completion.choices[0].message.content
 
+    return response
+def openai_func_call(query):
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_relevant_tweets",
+                "description": "Get the relevant tweets for the user's query. Call this whenever the user asks for something to build or wants some ideas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query_text": {
+                            "type": "string",
+                            "description": "The user's query",
+                        },
+                    },
+                    "required": ["query_text"],
+                    "additionalProperties": False,
+                },
+            }
+        }
+    ]
+
+    params = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant. Use the supplied tools to assist the user."},
+            {"role": "user", "content": query}
+        ],
+        "tools":tools,
+    }
+
+    client = openai_init()
+    response = client.chat.completions.create(**params)
+    
     return response
 
 #endregion
