@@ -27,7 +27,7 @@ def scrape_github_func(con, cur):
     print(f"Fetched {len(full_repo_data)} GitHub repos' data!\n")
 
     language_count = Counter()
-    total_time_per_language = Counter()
+    total_time_per_lang = Counter()
     technologies = set()
     repo_explainers = []
     
@@ -47,7 +47,7 @@ def scrape_github_func(con, cur):
         language_count.update(repo_languages)
 
         for lang, time in calculate_time_spent_per_language(repo_created_at, repo_updated_at, repo_languages).items():
-            total_time_per_language[lang] += time
+            total_time_per_lang[lang] += time
 
     language_percentage = calculate_language_percentage(language_count)
     print(f"Language Usage Percentage: {language_percentage}\n")
@@ -55,7 +55,9 @@ def scrape_github_func(con, cur):
     technologies_used = ' | '.join(list(technologies))
     print(f"Technologies Used: {technologies_used}\n")
 
-    print(f"Total Time Spent per Language: {total_time_per_language}\n")
+    sorted_total_time_per_lang = dict(sorted(total_time_per_lang.items(), key=lambda item: item[1], reverse=True))
+    sorted_total_time_per_lang_json = json.dumps(sorted_total_time_per_lang)
+    print(f"Total Time Spent per Language: {sorted_total_time_per_lang_json}\n")
 
     print(f"Repo Explainers Fetched: {len(repo_explainers)}\n")
     total_summary = ""
@@ -65,7 +67,7 @@ def scrape_github_func(con, cur):
         total_summary += f'- {summary}\n'
     print(f"Project Summaries:\n{total_summary}\n")
 
-    user_data = (username, language_percentage, technologies_used, repo_explainers_txt, total_summary)
+    user_data = (username, language_percentage, sorted_total_time_per_lang_json, technologies_used, repo_explainers_txt, total_summary)
     database_insert_github_user(con, cur, user_data)
     print("Inserted GitHub user data!\n")
 

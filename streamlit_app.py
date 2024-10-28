@@ -162,6 +162,7 @@ def settings_page():
             ]
         ]
     )
+    # TODO: Add a way to stop the operation while running
     if st.button("Sync", key="sync_github2"):
         scrape_github_func(con, cur)
 

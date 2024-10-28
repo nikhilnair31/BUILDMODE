@@ -71,6 +71,7 @@ def database_create_github_user(cur):
         GIT_USER (
             USERNAME TEXT PRIMARY KEY, 
             LANGUAGE_COUNT TEXT,
+            LANGUAGE_TIME TEXT,
             TECHNOLOGIES TEXT,
             REPO_EXPLAINERS TEXT,
             REPOS_SUMMARY TEXT
@@ -144,11 +145,12 @@ def database_insert_github_user(con, cur, data):
         GIT_USER (
             USERNAME, 
             LANGUAGE_COUNT,
+            LANGUAGE_TIME,
             TECHNOLOGIES,
             REPO_EXPLAINERS,
             REPOS_SUMMARY
         ) 
-        VALUES (?, ?, ?, ?, ?);
+        VALUES (?, ?, ?, ?, ?, ?);
         """, 
         data
     )
