@@ -3,6 +3,8 @@ import time
 import json
 import asyncio
 import streamlit as st
+from PIL import Image
+from typing import List
 from scrape_twitter import scrape_twitter_func
 from scrape_github import scrape_github_func
 from start_embeddings import set_embdedding_func
@@ -26,7 +28,8 @@ from api import (
     openai_func_call
 )
 from helper import (
-    serialize_f32
+    serialize_f32,
+    encode_image_to_base64
 )
 
 con, cur = database_init()
@@ -64,13 +67,8 @@ def init_sys():
 def chat_page():
     st.title("BUILDMODE")
 
-    # Default values for count and llm provider
-    # count = 10
-    # llm_provider = "Anthropic"
-    with st.sidebar:
-        count = st.slider("How many posts to reference?", 10, 200, 50)
-        llm_provider = st.radio("Pick the LLM model", ["Anthropic", "OpenAI"])
-    
+    count = 100
+    llm_provider = "Anthropic"
     system_prompt = init_sys()
 
     if "messages" not in st.session_state:
@@ -78,38 +76,60 @@ def chat_page():
             {"role": "assistant", "content": "What do you want to BUILD today?"}
         ]
 
+    # Loop to display chat
     for msg in st.session_state.messages:
-        display_content = msg["content"]
+        # For system messages do not display the content
+        if msg["role"] == "system":
+            continue
+        
         # For user messages, extract only the query part
+        display_content = msg["content"]
         if msg["role"] == "user":
             display_content = display_content.split("User's Query: ")[-1]
         st.chat_message(msg["role"]).write(display_content)
 
-    if query := st.chat_input():
+    if chatinput := st.chat_input(accept_file=True, file_type=["png", "jpg"]):
+        # Pull text and image from user's chat input
+        user_input_text = chatinput.text
+        user_input_files = chatinput.files
+
+        # Use function call to check if user's asking for an idea
         similar_tweets_rows = []
-        
-        response = openai_func_call(query)
+        response = openai_func_call(user_input_text)
         tool_call = response.choices[0].message.tool_calls
         if tool_call:
-            query = json.loads(tool_call[0].function.arguments).get('query_text')
+            tool_query = json.loads(tool_call[0].function.arguments).get('user_input_text')
             query_vec = replicate_embedding(
                 "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
-                {"modality": "text", "text_input": query}
+                {"modality": "text", "text_input": tool_query}
             )
             query_vec_serialized = [serialize_f32(query_vec)]
             similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
 
+        # FIXME: Need to pass these images into the api
+        # Encode image to base64
+        image_base64s = []
+        if user_input_files:
+            for uploaded_file in user_input_files:
+                image = Image.open(uploaded_file)
+                image_base64 = encode_image_to_base64(image)
+                image_base64s.append(image_base64)
+
+        # Save messages to session state
         st.session_state.messages.append({
             "role": "user", 
-            "content": f"Relevant Social Media Posts: {str(similar_tweets_rows)}\nUser's Query: {query}"
+            "content": [
+                f"Relevant Social Media Posts: {str(similar_tweets_rows)}\nUser's Query: {user_input_text}"
+            ]
         })
-        st.chat_message("user").write(query)
+        st.chat_message("user").write(user_input_text)
         
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner('Thinking...'):
                 response = anthropic_chat(
                     model="claude-3-5-sonnet-20241022",
+                    images=similar_tweets_rows,
                     messages=st.session_state.messages,
                     system=system_prompt
                 ) if llm_provider == "Anthropic" else openai_chat(
@@ -148,9 +168,13 @@ def settings_page():
             ]
         ]
     )
-    # TODO: Add a way to stop the operation while running
-    if st.button("Sync", key="sync_github2"):
+    github_sync_btn = st.button("Sync", key="sync_github")
+    if github_sync_btn:
+        github_stop_btn = st.button("Stop")
         scrape_github_func(con, cur)
+        if github_stop_btn:
+            github_sync_btn.disabled = False
+            st.stop()
 
     st.divider()
 
@@ -170,8 +194,13 @@ def settings_page():
                 ("Twitter Reset Interval", "TWITTER_RESET_INTERVAL", ("number", 20))
             ]
     ])
-    if st.button("Sync", key="sync_twitter2"):
+    twitter_sync_btn = st.button("Sync", key="sync_twitter")
+    if twitter_sync_btn:
+        twitter_stop_btn = st.button("Stop")
         scrape_twitter_func(con, cur)
+        if twitter_stop_btn:
+            twitter_sync_btn.disabled = False
+            st.stop()
 
     st.divider()
 
@@ -189,13 +218,17 @@ def settings_page():
             ]
         ]
     )
-
-    if st.button("Run Emeddings"):
+    embeddings_sync_btn = st.button("Sync", key="sync_embeddings")
+    if embeddings_sync_btn:
+        embeddings_stop_btn = st.button("Stop")
         set_embdedding_func(con, cur)
+        if embeddings_stop_btn:
+            embeddings_sync_btn.disabled = False
+            st.stop()
 
     st.divider()
 
-    if st.button("Save"):
+    if st.button("Save", type="primary"):
         if update_env_file():
             st.success("Settings saved successfully!")
         else:
