@@ -3,7 +3,7 @@ import json
 import struct
 from io import BytesIO
 from typing import List
-
+import base64
 
 # Serializes a list of floats into a compact "raw bytes" format
 def serialize_f32(vector: List[float]) -> bytes:

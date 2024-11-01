@@ -120,7 +120,7 @@ def chat_page():
     st.title("BUILDMODE")
 
     count = 100
-    llm_provider = "Anthropic"
+    llm_provider = "OpenAI"
     system_prompt = init_sys()
 
     if "messages" not in st.session_state:
@@ -167,40 +167,35 @@ def chat_page():
             "text": f"""
                 <social_media_posts>
                 {str(similar_tweets_rows)}
-                <social_media_posts>
+                </social_media_posts>
                 
                 <user_query>
                 {user_input_text}
                 </user_query>
             """,
         }
-        print(f'text_content\n{text_content}\n')
 
-        # FIXME: Need to pass these images into the api
         # Encode image to base64
         image_contents = []
-        if user_input_files:
-            for uploaded_file in user_input_files:
-                image = Image.open(uploaded_file)
-                base64_image = encode_image_to_base64(image)
-                image_contents.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url":  f"data:image/jpeg;base64,{base64_image}"
-                    },
-                })
-        print(f'image_contents\n{image_contents}\n')
-
-        total_message_content = [text_content] + image_contents
-        print(f'total_message_content\n{total_message_content}\n')
+        for uploaded_file in user_input_files:
+            image = Image.open(uploaded_file)
+            base64_image = encode_image_to_base64(image)
+            image_contents.append({
+                "type": "image_url",
+                "image_url": {
+                    "url":  f"data:image/jpeg;base64,{base64_image}"
+                },
+            })
 
         # Save messages to session state
         st.session_state.messages.append({
             "role": "user", 
-            "content": total_message_content
+            "content": [text_content] + image_contents
         })
-        print(f'st.session_state.messages\n{st.session_state.messages}\n')
-        st.chat_message("user").write(user_input_text)
+        with st.chat_message("user"):
+            for uploaded_file in user_input_files:
+                st.image(uploaded_file)
+            st.write(user_input_text)
         
         with st.chat_message("assistant"):
             message_placeholder = st.empty()

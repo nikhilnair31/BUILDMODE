@@ -41,7 +41,7 @@ def openai_init():
         st.stop()
 
     return OpenAI(api_key = OPENAI_API_KEY)
-def openai_chat(model, images, messages, system = None):
+def openai_chat(model, messages, system = None):
     # Only include 'system' if it's provided
     if system is not None:
         messages.insert(0, {"role": "system", "content": system})
