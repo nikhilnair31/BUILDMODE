@@ -5,6 +5,12 @@ import asyncio
 from pathlib import Path
 from twikit import Client
 from dotenv import load_dotenv
+import sys
+from pathlib import Path
+
+# Add parent directory to sys.path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from helper import serialize_clean
 
 load_dotenv()
@@ -25,25 +31,11 @@ async def pull_multiple_tweets():
     user = await client.get_user_by_screen_name(USER_SCREEN_NAME)
 
     tweets = await user.get_tweets('Tweets')
-    tweets_result = tweets.__dict__["_Result__results"]
-    print(
-        f'{tweets_result}',
-        sep='\n'
-    )
-    
-    tweets_data = [tweet.__dict__ for tweet in tweets_result]
-    print(
-        f'{tweets_data}',
-        sep='\n'
-    )
-    
-    tweets_json = json.dumps(tweets_data)
-    print(
-        f'{tweets_json}',
-        sep='\n'
-    )
-    
-    for tweet in tweets[:2]:
-        print(f'--------------------\n{tweet.__dict__}\n--------------------\n')
+    for idx, tweet in enumerate(tweets):
+        tweet_json = serialize_clean(tweet)
+        print(
+            f'{idx}: {tweet_json["text"]}',
+            sep='\n'
+        )
 
 asyncio.run(pull_multiple_tweets())

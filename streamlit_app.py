@@ -5,7 +5,9 @@ import asyncio
 import streamlit as st
 from PIL import Image
 from typing import List
-from scrape_twitter import scrape_twitter_func
+from scrape_twitter import (
+    scrape_twitter_func
+)
 from scrape_github import scrape_github_func
 from start_embeddings import set_embdedding_func
 from saving import (
@@ -36,30 +38,80 @@ con, cur = database_init()
 
 def init_sys():
     base_system = f"""
-        You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey, whether it's video games, apps, AI startups, or other digital products.
+        You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey for digital products such as video games, apps, AI startups, and other digital innovations.
 
-        Tasks:
-        - Analyze the user's social media post content to understand their interests 
-        - Transform patterns in these posts into creative product opportunities
-        - Utilize the user's Github profile and repositories to identify their skillset and experience
+        You will be provided with three main inputs:
 
-        When Ideating:
-        - Always directly reference the exact social media posts that inspire the ideas proposed. Input format of social posts is (ID, POST_CONTENT, POST_IMAGE_URLS) so return the IDs of the inspiration posts. 
-        - Present exactly top 3 unique concept that align with their posts and interests
-        - Provide a single paragraph for each idea then elaborate if the user needs more details
-        - Include market potential and potential challenges for each suggestion
+        1. Social media posts from the user:
+        <social_media_posts>
+        {{SOCIAL_MEDIA_POSTS}}
+        </social_media_posts>
 
-        Communication Style:
-        - Use relevant examples and case studies
-        - Ask clarifying questions when needed
-        - Respond in markdown format
+        2. The user's GitHub profile information:
+        <github_profile>
+        {{GITHUB_PROFILE}}
+        </github_profile>
+
+        3. The user's query:
+        <user_query>
+        {{USER_QUERY}}
+        </user_query>
+
+        Your task is to analyze these inputs and generate creative product ideas tailored to the user's interests and skills. Follow these steps:
+
+        1. Analyze the social media posts:
+        - Identify recurring themes, interests, and patterns in the user's posts
+        - Note the IDs of posts that could inspire product ideas
+
+        2. Examine the GitHub profile:
+        - Determine the user's technical skills and experience based on their repositories and contributions
+        - Identify any specializations or areas of expertise
+
+        3. Ideation process:
+        - Based on the analysis, generate exactly three unique product concepts that align with the user's interests and skills
+        - Ensure each idea is inspired by specific social media posts
+        - Consider the market potential and possible challenges for each concept
+
+        4. Prepare your response in the following format:
+        - Use markdown formatting for better readability
+        - For each of the three ideas, provide:
+            a. A concise title
+            b. A single paragraph describing the concept
+            c. The IDs of the inspiring social media posts
+            d. A brief analysis of market potential
+            e. Potential challenges
+
+        5. Communication style:
+        - Use relevant examples and case studies where appropriate
+        - Be prepared to ask clarifying questions if needed
+        - Maintain a professional yet encouraging tone
+
+        Your final response should be structured as follows:
+
+        <response>
+        ## Idea {{Number}}: [Title]
+
+        [Single paragraph description]
+
+        Inspired by posts: [List of post IDs]
+
+        Market potential: [Brief analysis]
+
+        Potential challenges: [List of challenges]
+
+        [Any clarifying questions, if necessary]
+        </response>
+
+        Remember to tailor your ideas to the user's specific interests and skills as evidenced by their social media posts and GitHub profile. 
+        Be creative, but realistic in your suggestions, always considering the feasibility based on the user's apparent capabilities.
     """
     github_user_rows = database_select_github_user(cur)
     system_prompt = f'''
         {base_system}
 
-        User's Github Profile and Repositories:
+        <github_profile>
         {str(github_user_rows)}
+        </github_profile>
     '''
     return system_prompt
 
@@ -83,12 +135,17 @@ def chat_page():
             continue
         
         # For user messages, extract only the query part
-        display_content = msg["content"]
         if msg["role"] == "user":
+            display_content = msg["content"][0]["text"]
             display_content = display_content.split("User's Query: ")[-1]
-        st.chat_message(msg["role"]).write(display_content)
+            st.chat_message(msg["role"]).write(display_content)
+        
+        # For user messages, extract only the query part
+        if msg["role"] == "assistant":
+            display_content = msg["content"]
+            st.chat_message(msg["role"]).write(display_content)
 
-    if chatinput := st.chat_input(accept_file=True, file_type=["png", "jpg"]):
+    if chatinput := st.chat_input(accept_file=True, file_type=["png"]):
         # Pull text and image from user's chat input
         user_input_text = chatinput.text
         user_input_files = chatinput.files
@@ -105,23 +162,44 @@ def chat_page():
             )
             query_vec_serialized = [serialize_f32(query_vec)]
             similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
+        text_content = {
+            "type": "text",
+            "text": f"""
+                <social_media_posts>
+                {str(similar_tweets_rows)}
+                <social_media_posts>
+                
+                <user_query>
+                {user_input_text}
+                </user_query>
+            """,
+        }
+        print(f'text_content\n{text_content}\n')
 
         # FIXME: Need to pass these images into the api
         # Encode image to base64
-        image_base64s = []
+        image_contents = []
         if user_input_files:
             for uploaded_file in user_input_files:
                 image = Image.open(uploaded_file)
-                image_base64 = encode_image_to_base64(image)
-                image_base64s.append(image_base64)
+                base64_image = encode_image_to_base64(image)
+                image_contents.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url":  f"data:image/jpeg;base64,{base64_image}"
+                    },
+                })
+        print(f'image_contents\n{image_contents}\n')
+
+        total_message_content = [text_content] + image_contents
+        print(f'total_message_content\n{total_message_content}\n')
 
         # Save messages to session state
         st.session_state.messages.append({
             "role": "user", 
-            "content": [
-                f"Relevant Social Media Posts: {str(similar_tweets_rows)}\nUser's Query: {user_input_text}"
-            ]
+            "content": total_message_content
         })
+        print(f'st.session_state.messages\n{st.session_state.messages}\n')
         st.chat_message("user").write(user_input_text)
         
         with st.chat_message("assistant"):
@@ -129,7 +207,6 @@ def chat_page():
             with st.spinner('Thinking...'):
                 response = anthropic_chat(
                     model="claude-3-5-sonnet-20241022",
-                    images=similar_tweets_rows,
                     messages=st.session_state.messages,
                     system=system_prompt
                 ) if llm_provider == "Anthropic" else openai_chat(
@@ -194,13 +271,30 @@ def settings_page():
                 ("Twitter Reset Interval", "TWITTER_RESET_INTERVAL", ("number", 20))
             ]
     ])
-    twitter_sync_btn = st.button("Sync", key="sync_twitter")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        twitter_sync_btn = st.button("Sync", key="sync_twitter")
+    with col2:
+        twitter_stop_btn = st.button("Stop", key="stop_twitter")
+
     if twitter_sync_btn:
-        twitter_stop_btn = st.button("Stop")
-        scrape_twitter_func(con, cur)
-        if twitter_stop_btn:
-            twitter_sync_btn.disabled = False
-            st.stop()
+        if st.session_state.get('syncing_twitter', False):
+            st.warning("Sync already in progress!")
+            return
+        
+        st.session_state.syncing_twitter = True
+        try:
+            # Use asyncio to run the async function
+            asyncio.run(scrape_twitter_func(con, cur))
+        except Exception as e:
+            st.error(f"Error during sync: {str(e)}")
+        finally:
+            st.session_state.syncing_twitter = False
+
+    if twitter_stop_btn:
+        st.session_state.syncing = False
+        st.rerun()
 
     st.divider()
 
@@ -239,7 +333,7 @@ st.set_page_config(
     page_title="BUILDMODE",
     page_icon=":material/build:",
     layout="centered",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
     menu_items={
         'About': "[Github](https://github.com/nikhilnair31/BUILDMODE)"
     }

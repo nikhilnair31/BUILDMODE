@@ -68,6 +68,42 @@ def clean_tweet_dump_data(tweets_str):
         )
 
     return cleaned_tweets
+# Append a tweet to the collection list with proper formatting.
+async def append_tweet_to_list(tweets, all_tweets, cnt, tweet_type):
+    all_tweets.append(
+        (
+            cnt, 
+            format_tweet_dump_data(tweets), 
+            tweet_type, 
+            tweets.next_cursor
+        )
+    )
+    print(f'Tweets Count: {cnt}')
+    
+    # Handle rate limiting
+    if len(all_tweets) % RATE_LIMIT == 0 and len(all_tweets) > 0:
+        print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
+        time.sleep(RESET_INTERVAL)
+    
+    return cnt + 1
+# Check if any new tweet IDs are already in saved tweets
+def check_for_saved_tweet_id(tweets, saved_ids):
+    if len(saved_ids) > 0:
+        # Access the results from the tweet object
+        tweets_result = tweets.__dict__["_Result__results"]
+        tweets_data = [serialize_clean(tweet) for tweet in tweets_result]
+
+        # Get the tweet ID from the results
+        extracted_ids = [tweet["id"] for tweet in tweets_data]
+
+        # Get the tweet ID from the results
+        for tweet_id in extracted_ids:
+            if tweet_id in saved_ids:
+                print(f"Found duplicate tweet ID {tweet_id}. Skipping update.")
+                return True
+    
+    print(f"Found NO duplicate tweet IDs")
+    return False
 
 # Initialize twitter client
 async def tweet_login():
@@ -102,44 +138,31 @@ async def tweet_user(client):
     return user
 
 # Get user tweets
-async def get_user_tweets(con, cur, user):
+async def get_user_tweets(con, cur, user, saved_ids):
     cnt = 0
     all_tweets = []
     
     try:
         tweets = await user.get_tweets('Tweets')
-        cnt += 1
-        all_tweets.append(
-            (
-                cnt, 
-                format_tweet_dump_data(tweets), 
-                "Tweets", 
-                tweets.next_cursor
-            )
-        )
-        print(f'Tweets Count: {cnt}')
+
+        # Append initial tweets
+        cnt = await append_tweet_to_list(tweets, all_tweets, cnt, "Tweets")
         
-        # Check if we've hit the rate limit
-        if len(all_tweets) % RATE_LIMIT == 0 and len(all_tweets) > 0:
-            print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
-            time.sleep(RESET_INTERVAL)
+        # Check if any new tweet IDs are already in saved tweets
+        if check_for_saved_tweet_id(tweets, saved_ids):
+            return all_tweets
         
+        # Fetch remaining tweets
         while True:
             tweets = await tweets.next()
-
+            
             if not tweets:
                 break
+
+            if check_for_saved_tweet_id(tweets, saved_ids):
+                return all_tweets
             
-            cnt += 1
-            all_tweets.append(
-                (
-                    cnt, 
-                    format_tweet_dump_data(tweets), 
-                    "Tweets", 
-                    tweets.next_cursor
-                )
-            )
-            print(f'Tweets Count: {cnt}')
+            cnt = await append_tweet_to_list(tweets, all_tweets, cnt, "Tweets")
     
     except Exception as e:
         print(f"Error: {e}")
@@ -147,44 +170,31 @@ async def get_user_tweets(con, cur, user):
     return all_tweets
 
 # Get user bookmarks
-async def get_user_bookmarks(con, cur, client):
+async def get_user_bookmarks(con, cur, client, saved_ids):
     cnt = 0
     all_bookmarks = []
     
     try:
         bookmarks = await client.get_bookmarks()
-        cnt += 1
-        all_bookmarks.append(
-            (
-                cnt, 
-                format_tweet_dump_data(bookmarks), 
-                "Bookmarks", 
-                bookmarks.next_cursor
-            )
-        )
-        print(f'Bookmarks Count: {cnt}')
+
+        # Append initial bookmarks
+        cnt = await append_tweet_to_list(bookmarks, all_bookmarks, cnt, "Bookmarks")
         
-        # Check if we've hit the rate limit
-        if len(all_bookmarks) % RATE_LIMIT == 0 and len(all_bookmarks) > 0:
-            print(f"Reached rate limit. Waiting for {RESET_INTERVAL} seconds.")
-            time.sleep(RESET_INTERVAL)
+        # Check if any new tweet IDs are already in saved 
+        if check_for_saved_tweet_id(bookmarks, saved_ids):
+            return all_bookmarks
         
+        # Fetch remaining bookmarks
         while True:
             bookmarks = await bookmarks.next()
-
+            
             if not bookmarks:
                 break
+
+            if check_for_saved_tweet_id(bookmarks, saved_ids):
+                return all_bookmarks
             
-            cnt += 1
-            all_bookmarks.append(
-                (
-                    cnt, 
-                    format_tweet_dump_data(bookmarks), 
-                    "Bookmarks", 
-                    bookmarks.next_cursor
-                )
-            )
-            print(f'Bookmarks Count: {cnt}')
+            cnt = await append_tweet_to_list(bookmarks, all_bookmarks, cnt, "Bookmarks")
     
     except Exception as e:
         print(f"Error: {e}")

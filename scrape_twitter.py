@@ -3,27 +3,49 @@ import json
 import asyncio
 from dotenv import load_dotenv
 from scrape_playwright import scrape_tweet
-from twit import tweet_login, tweet_user, get_user_tweets, get_user_bookmarks, clean_tweet_dump_data
-from db import (database_init, database_create_vec, database_create_tweet_dump, database_create_tweets, database_insert_dump_data, database_insert_data, database_select_tweet_dump, database_select_tweet_wo_media)
+from twit import (
+    tweet_login, 
+    tweet_user, 
+    get_user_tweets, 
+    get_user_bookmarks, 
+    clean_tweet_dump_data
+)
+from db import (
+    database_init, 
+    database_create_vec, 
+    database_create_tweet_dump, 
+    database_create_tweets, 
+    database_insert_dump_data, 
+    database_insert_data, 
+    database_select_all_tweets,
+    database_select_tweet_dump, 
+    database_select_tweet_wo_media
+)
 
 async def scrape_twitter_func(con, cur):
     database_create_vec(cur)
     database_create_tweets(cur)
     database_create_tweet_dump(cur)
 
+    # Extract just the IDs from curr_saved_tweets for easier comparison
+    curr_saved_tweets = database_select_all_tweets(cur)
+    saved_ids = {int(tweet[0]) for tweet in curr_saved_tweets}
+    saved_ids_list = list(saved_ids)
+    print(f'saved_ids_list: {saved_ids_list[:3]}')
+
     twitter_client = await tweet_login()
 
     user = await tweet_user(twitter_client)
 
     # Get list of user tweets
-    user_tweets_list = await get_user_tweets(con, cur, user)
+    user_tweets_list = await get_user_tweets(con, cur, user, saved_ids_list)
     print(f'Got User tweets')
     for tweet in user_tweets_list:
         database_insert_dump_data(con = con, cur = cur, data = tweet)
     print(f'Inserted User tweets!')
 
     # Get list of user bookmarks
-    user_bookmarks_list = await get_user_bookmarks(con, cur, twitter_client)
+    user_bookmarks_list = await get_user_bookmarks(con, cur, twitter_client, saved_ids_list)
     print(f'Got User bookmarks')
     for bookmark in user_bookmarks_list:
         database_insert_dump_data(con = con, cur = cur, data = bookmark)

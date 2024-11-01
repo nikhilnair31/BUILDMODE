@@ -1,7 +1,9 @@
 import os
 import json
 import struct
+from io import BytesIO
 from typing import List
+
 
 # Serializes a list of floats into a compact "raw bytes" format
 def serialize_f32(vector: List[float]) -> bytes:
@@ -10,7 +12,7 @@ def serialize_f32(vector: List[float]) -> bytes:
 def encode_image_to_base64(image):
     """Convert PIL Image to base64 string"""
     buffered = BytesIO()
-    image.save(buffered, format="JPEG")
+    image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
     
 # Function to automatically remove non-serializable attributes

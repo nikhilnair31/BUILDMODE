@@ -194,6 +194,17 @@ def database_select_tweet_dump(cur):
     
     return output
 
+def database_select_all_tweets(cur):
+    cur.execute(
+        f"""
+        SELECT DISTINCT ID
+        FROM TWEETS
+        """
+    )
+    output = cur.fetchall()
+    
+    return output
+
 def database_select_tweet(cur):
     cur.execute(
         f"""
