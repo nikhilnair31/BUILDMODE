@@ -2,14 +2,19 @@ import re
 import time
 import json
 import asyncio
+import threading
 import streamlit as st
 from PIL import Image
 from typing import List
 from scrape_twitter import (
     scrape_twitter_func
 )
-from scrape_github import scrape_github_func
-from start_embeddings import set_embdedding_func
+from scrape_github import (
+    scrape_github_func
+)
+from start_embeddings import (
+    set_embdedding_func
+)
 from saving import (
     update_env_file
 )
@@ -158,6 +163,7 @@ def chat_page():
         print(f'tool_call: {tool_call}')
         if tool_call:
             tool_query = json.loads(tool_call[0].function.arguments).get('query_text')
+            # FIXME: Use the input image with the text to pull relevant content
             query_vec = replicate_embedding(
                 "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
                 {"modality": "text", "text_input": tool_query}
@@ -269,30 +275,24 @@ def settings_page():
                 ("Twitter Reset Interval", "TWITTER_RESET_INTERVAL", ("number", 20))
             ]
     ])
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        twitter_sync_btn = st.button("Sync", key="sync_twitter")
-    with col2:
-        twitter_stop_btn = st.button("Stop", key="stop_twitter")
 
-    if twitter_sync_btn:
-        if st.session_state.get('syncing_twitter', False):
+    # Sync button to start syncing process in a new thread
+    if st.button("Sync", key="sync_twitter"):
+        if st.session_state.syncing_twitter:
             st.warning("Sync already in progress!")
-            return
-        
-        st.session_state.syncing_twitter = True
-        try:
-            # Use asyncio to run the async function
-            asyncio.run(scrape_twitter_func(con, cur))
-        except Exception as e:
-            st.error(f"Error during sync: {str(e)}")
-        finally:
-            st.session_state.syncing_twitter = False
+        else:
+            st.session_state.syncing_twitter = True
+            st.session_state.sync_thread = threading.Thread(target=scrape_twitter_func, args=(con, cur))
+            st.session_state.sync_thread.start()
+            st.success("Sync started!")
 
-    if twitter_stop_btn:
-        st.session_state.syncing = False
-        st.rerun()
+    # Stop button to stop syncing process
+    if st.button("Stop", key="stop_twitter"):
+        if st.session_state.syncing_twitter:
+            st.session_state.syncing_twitter = False
+            st.success("Sync stopped.")
+        else:
+            st.warning("No sync in progress.")
 
     st.divider()
 
