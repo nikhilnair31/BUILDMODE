@@ -38,7 +38,7 @@ def create_sync_section(title, inputs):
                     st.warning(f"Invalid number format for {env_key} in .env file")
                     col.number_input(label, value=0.0, key=env_key)
 
-# TODO: Add a twitter icon
+# TODO: Add a twitter icon for links
 def create_link_buttons(col, data):
     if data:
         post_url, post_text = data

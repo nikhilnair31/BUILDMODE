@@ -21,7 +21,7 @@ from db import (
     database_select_tweet_dump, 
     database_select_tweet_wo_media
 )
-
+ 
 async def scrape_twitter_func(con, cur):
     database_create_vec(cur)
     database_create_tweets(cur)

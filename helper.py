@@ -9,8 +9,8 @@ import base64
 def serialize_f32(vector: List[float]) -> bytes:
     return struct.pack("%sf" % len(vector), *vector)
 
+# Convert PIL Image to base64 string
 def encode_image_to_base64(image):
-    """Convert PIL Image to base64 string"""
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')

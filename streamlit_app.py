@@ -141,6 +141,7 @@ def chat_page():
             st.chat_message(msg["role"]).write(display_content)
         
         # For user messages, extract only the query part
+        # TODO: Make this work in case the LLM API sends back an image
         if msg["role"] == "assistant":
             display_content = msg["content"]
             st.chat_message(msg["role"]).write(display_content)
@@ -154,8 +155,9 @@ def chat_page():
         similar_tweets_rows = []
         response = openai_func_call(user_input_text)
         tool_call = response.choices[0].message.tool_calls
+        print(f'tool_call: {tool_call}')
         if tool_call:
-            tool_query = json.loads(tool_call[0].function.arguments).get('user_input_text')
+            tool_query = json.loads(tool_call[0].function.arguments).get('query_text')
             query_vec = replicate_embedding(
                 "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
                 {"modality": "text", "text_input": tool_query}
@@ -200,6 +202,7 @@ def chat_page():
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner('Thinking...'):
+                # TODO: Make anthropic's api work for the image input
                 response = anthropic_chat(
                     model="claude-3-5-sonnet-20241022",
                     messages=st.session_state.messages,

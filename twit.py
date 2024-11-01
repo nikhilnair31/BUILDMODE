@@ -94,7 +94,7 @@ def check_for_saved_tweet_id(tweets, saved_ids):
         tweets_data = [serialize_clean(tweet) for tweet in tweets_result]
 
         # Get the tweet ID from the results
-        extracted_ids = [tweet["id"] for tweet in tweets_data]
+        extracted_ids = [int(tweet["id"]) for tweet in tweets_data]
 
         # Get the tweet ID from the results
         for tweet_id in extracted_ids:
