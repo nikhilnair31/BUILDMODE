@@ -70,6 +70,11 @@ class ConversationManager:
                 thread_id = file.replace('conversation_', '').replace('.json', '')
                 threads.append(thread_id)
         return sorted(threads, reverse=True)  # Most recent first
+    
+    def delete_conversation(self, thread_id):
+        filename = f"{self.save_dir}/conversation_{thread_id}.json"
+        if os.path.exists(filename):
+            os.remove(filename)
 
     def create_new_thread(self):
         thread_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -80,7 +85,7 @@ def initialize_session_state():
     if 'conversation_manager' not in st.session_state:
         st.session_state.conversation_manager = ConversationManager()
     
-    # Initialize or create new thread if none exists
+    # Initialize or create new conv_thread if none exists
     if 'current_thread' not in st.session_state:
         threads = st.session_state.conversation_manager.list_conversations()
         if threads:
@@ -280,14 +285,31 @@ def chat_page():
         
         # List existing conversations
         threads = st.session_state.conversation_manager.list_conversations()
-        for thread in threads:
+        for conv_id, conv_thread in enumerate(threads):
             # Add date formatting for better readability
-            display_date = datetime.strptime(thread, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M")
-            if st.button(f"Load conversation: {display_date}", key=thread):
-                st.session_state.current_thread = thread
-                st.session_state.messages = st.session_state.conversation_manager.load_conversation(thread)
-                st.rerun()
-
+            display_date = datetime.strptime(conv_thread, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M")
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                if st.button(f"Conv: {display_date}", key=conv_thread):
+                    st.session_state.current_thread = conv_thread
+                    st.session_state.messages = st.session_state.conversation_manager.load_conversation(conv_thread)
+                    st.rerun()
+            with col2:
+                if st.button('🗑️', key=f'delete_{conv_id}'):
+                    st.session_state.conversation_manager.delete_conversation(conv_thread)
+                    # If we're deleting the current thread, switch to the most recent one
+                    if conv_thread == st.session_state.current_thread:
+                        remaining_threads = st.session_state.conversation_manager.list_conversations()
+                        if remaining_threads:
+                            st.session_state.current_thread = remaining_threads[0]
+                            st.session_state.messages = st.session_state.conversation_manager.load_conversation(remaining_threads[0])
+                        else:
+                            # If no conversations left, create a new one
+                            new_thread = st.session_state.conversation_manager.create_new_thread()
+                            st.session_state.current_thread = new_thread
+                            st.session_state.messages = []
+                    st.rerun()
+                    
     # Loop to display chat
     for msg in st.session_state.messages:
         # For system messages do not display the content
@@ -384,13 +406,13 @@ def settings_page():
             ]
     ])
 
-    # Sync button to start syncing process in a new thread
+    # Sync button to start syncing process in a new conv_thread
     if st.button("Sync", key="sync_twitter"):
         if st.session_state.syncing_twitter:
             st.warning("Sync already in progress!")
         else:
             st.session_state.syncing_twitter = True
-            st.session_state.sync_thread = threading.Thread(target=scrape_twitter_func, args=(con, cur))
+            st.session_state.sync_thread = threading.conv_Thread(target=scrape_twitter_func, args=(con, cur))
             st.session_state.sync_thread.start()
             st.success("Sync started!")
 

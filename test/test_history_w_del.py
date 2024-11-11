@@ -4,10 +4,13 @@ import streamlit as st
 
 def load_conversations():
     """Load existing conversations from the JSON file"""
-    if os.path.exists('conversations.json'):
-        with open('conversations.json', 'r') as f:
-            return json.load(f)
-    return {}
+    files = os.listdir("conversations")
+    threads = []
+    for file in files:
+        if file.startswith('conversation_') and file.endswith('.json'):
+            thread_id = file.replace('conversation_', '').replace('.json', '')
+            threads.append(thread_id)
+    return sorted(threads, reverse=True)
 
 def save_conversations(conversations):
     """Save conversations to the JSON file"""
@@ -31,13 +34,13 @@ def display_conversations():
     
     st.subheader("Saved Conversations")
     
-    for conv_id, conv_data in conversations.items():
+    for conv_id, conv_data in enumerate(conversations):
         col1, col2, col3 = st.columns([3, 1, 0.5])
         
         with col1:
             # Display conversation title or first message
-            title = conv_data.get('title', conv_data['messages'][0]['content'][:50] + '...')
-            st.write(f"**{title}**")
+            # title = conv_data.get('title', conv_data['messages'][0]['content'][:50] + '...')
+            st.write(f"**{'title'}**")
         
         with col2:
             # Load conversation button
