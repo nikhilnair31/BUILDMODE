@@ -9,6 +9,28 @@ import streamlit as st
 
 load_dotenv()
 
+#region OpenRouter
+
+def openrouter_init():
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+
+    if not OPENROUTER_API_KEY:
+        st.error("Please add your OpenRouter API key to continue.")
+        st.stop()
+
+    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key = OPENROUTER_API_KEY)
+def openrouter_chat(provider, model, messages):
+    client = openrouter_init()
+    completion = client.chat.completions.create(
+        model=model,
+        messages=messages
+    )
+    response = completion.choices[0].message.content
+
+    return response
+
+#endregion
+
 #region Replicate
 
 def replicate_init():
@@ -65,7 +87,7 @@ def openai_func_call(query):
             "type": "function",
             "function": {
                 "name": "get_relevant_tweets",
-                "description": "Get the relevant tweets for the user's query. Call this whenever the user asks for something to build or wants some ideas",
+                "description": "Get the relevant tweets for the user's query. Call this only if the user asks for something new to build or wants some new ideas",
                 "parameters": {
                     "type": "object",
                     "properties": {

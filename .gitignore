@@ -1,4 +1,5 @@
 content/*
+conversations/*
 data/*
 cursor.txt
 data/cookies.json

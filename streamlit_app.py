@@ -1,4 +1,5 @@
 import re
+import os
 import time
 import json
 import asyncio
@@ -6,6 +7,7 @@ import threading
 import streamlit as st
 from PIL import Image
 from typing import List
+from datetime import datetime
 from scrape_twitter import (
     scrape_twitter_func
 )
@@ -13,7 +15,8 @@ from scrape_github import (
     scrape_github_func
 )
 from start_embeddings import (
-    set_embdedding_func
+    set_embdedding_func,
+    get_avg_vec
 )
 from saving import (
     update_env_file
@@ -40,6 +43,55 @@ from helper import (
 )
 
 con, cur = database_init()
+
+class ConversationManager:
+    def __init__(self, save_dir="conversations"):
+        self.save_dir = save_dir
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        
+    def save_conversation(self, conversation, thread_id):
+        filename = f"{self.save_dir}/conversation_{thread_id}.json"
+        with open(filename, 'w') as f:
+            json.dump(conversation, f)
+            
+    def load_conversation(self, thread_id):
+        filename = f"{self.save_dir}/conversation_{thread_id}.json"
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                return json.load(f)
+        return []
+    
+    def list_conversations(self):
+        files = os.listdir(self.save_dir)
+        threads = []
+        for file in files:
+            if file.startswith('conversation_') and file.endswith('.json'):
+                thread_id = file.replace('conversation_', '').replace('.json', '')
+                threads.append(thread_id)
+        return sorted(threads, reverse=True)  # Most recent first
+
+    def create_new_thread(self):
+        thread_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.save_conversation([{"role": "assistant", "content": "What do you want to BUILD today?"}], thread_id)
+        return thread_id
+
+def initialize_session_state():
+    if 'conversation_manager' not in st.session_state:
+        st.session_state.conversation_manager = ConversationManager()
+    
+    # Initialize or create new thread if none exists
+    if 'current_thread' not in st.session_state:
+        threads = st.session_state.conversation_manager.list_conversations()
+        if threads:
+            st.session_state.current_thread = threads[0]  # Load most recent
+        else:
+            st.session_state.current_thread = st.session_state.conversation_manager.create_new_thread()
+    
+    if 'messages' not in st.session_state:
+        st.session_state.messages = st.session_state.conversation_manager.load_conversation(
+            st.session_state.current_thread
+        )
 
 def init_sys():
     base_system = f"""
@@ -83,8 +135,6 @@ def init_sys():
             a. A concise title
             b. A single paragraph describing the concept
             c. The IDs of the inspiring social media posts
-            d. A brief analysis of market potential
-            e. Potential challenges
 
         5. Communication style:
         - Use relevant examples and case studies where appropriate
@@ -99,10 +149,6 @@ def init_sys():
         [Single paragraph description]
 
         Inspired by posts: [List of post IDs]
-
-        Market potential: [Brief analysis]
-
-        Potential challenges: [List of challenges]
 
         [Any clarifying questions, if necessary]
         </response>
@@ -120,18 +166,127 @@ def init_sys():
     '''
     return system_prompt
 
+def format_messages(provider, text_content, image_contents):
+    if provider == "Anthropic":
+        formatted_images = [{
+            "type": "image",
+            "source": {
+                "type": image.type,
+                "media_type": image.media_type,
+                "data": image.data
+            }
+        } for image in image_contents]
+        
+        formatted_text = {
+            "type": "text",
+            "text": text_content.text
+        }
+        
+        return [formatted_text] + formatted_images
+    elif provider == "OpenAI":
+        content = []
+        content.append(text_content)
+        
+        for image in image_contents:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{image.media_type};base64,{image.data}"
+                }
+            })
+            
+        return [{"role": "user", "content": content}]
+    else:
+        user_content = [text_content] + image_contents
+    
+    return user_content
+
+def process_user_input(chatinput):
+    # Pull text and image from user's chat input
+    user_input_text = chatinput.text
+    user_input_files = chatinput.files
+
+    # Use function call to check if user's asking for an idea
+    similar_tweets_rows = []
+    response = openai_func_call(user_input_text)
+    tool_call = response.choices[0].message.tool_calls
+    print(f'tool_call: {tool_call}')
+    if tool_call:
+        tool_query = json.loads(tool_call[0].function.arguments).get('query_text')
+        # FIXME: Use the input image with the text to pull relevant content
+        query_vec = replicate_embedding(
+            "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
+            {"modality": "text", "text_input": tool_query}
+        )
+        query_vec_serialized = [serialize_f32(query_vec)]
+        similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
+    
+    text_content_dic = {
+        "type": "text",
+        "text": f"""
+            <social_media_posts>
+            {str(similar_tweets_rows)}
+            </social_media_posts>
+            
+            <user_query>
+            {user_input_text}
+            </user_query>
+        """,
+    }
+
+    # Encode image to base64
+    image_contents_list = []
+    for uploaded_file in user_input_files:
+        image = Image.open(uploaded_file)
+        base64_image = encode_image_to_base64(image)
+        image_contents_list.append(base64_image)
+    
+    return {
+        "role": "user", 
+        "content": format_messages(llm_provider, text_content_dic, image_contents_list)
+    }
+
+def generate_link(cur, text):
+    matches = re.findall(r"\b\d{19}\b", text)
+    if matches:
+        columns = st.columns(len(matches), vertical_alignment="bottom")
+        for idx, match in enumerate(matches):
+            post_data = database_select_tweet_w_id(cur, match)
+            create_link_buttons(col = columns[idx], data = post_data)
+            
+def stream_text(text):
+    message_placeholder = st.empty()
+    full_response = ""
+    for chunk in text.split(" "):
+        full_response += chunk + " "
+        message_placeholder.markdown(full_response + "▌")
+        time.sleep(0.03)
+        message_placeholder.markdown(full_response)
+
 # Define a function for the chat interface (default page)
 def chat_page():
     st.title("BUILDMODE")
 
     count = 100
-    llm_provider = "OpenAI"
-    system_prompt = init_sys()
+    llm_provider = "Anthropic"
 
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = [
-            {"role": "assistant", "content": "What do you want to BUILD today?"}
-        ]
+    with st.sidebar:
+        # Button to start new conversation
+        if st.button("New Conversation"):
+            thread_id = st.session_state.conversation_manager.create_new_thread()
+            st.session_state.current_thread = thread_id
+            st.session_state.messages = []
+            st.rerun()
+        
+        # List existing conversations
+        threads = st.session_state.conversation_manager.list_conversations()
+        for thread in threads:
+            # Add date formatting for better readability
+            display_date = datetime.strptime(thread, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M")
+            if st.button(f"Load conversation: {display_date}", key=thread):
+                st.session_state.current_thread = thread
+                st.session_state.messages = st.session_state.conversation_manager.load_conversation(thread)
+                st.rerun()
 
     # Loop to display chat
     for msg in st.session_state.messages:
@@ -142,7 +297,8 @@ def chat_page():
         # For user messages, extract only the query part
         if msg["role"] == "user":
             display_content = msg["content"][0]["text"]
-            display_content = display_content.split("User's Query: ")[-1]
+            display_content = display_content.split("<user_query>")[1]
+            display_content = display_content.replace("</user_query>", "")
             st.chat_message(msg["role"]).write(display_content)
         
         # For user messages, extract only the query part
@@ -152,89 +308,41 @@ def chat_page():
             st.chat_message(msg["role"]).write(display_content)
 
     if chatinput := st.chat_input(accept_file=True, file_type=["png"]):
-        # Pull text and image from user's chat input
-        user_input_text = chatinput.text
-        user_input_files = chatinput.files
-
-        # Use function call to check if user's asking for an idea
-        similar_tweets_rows = []
-        response = openai_func_call(user_input_text)
-        tool_call = response.choices[0].message.tool_calls
-        print(f'tool_call: {tool_call}')
-        if tool_call:
-            tool_query = json.loads(tool_call[0].function.arguments).get('query_text')
-            # FIXME: Use the input image with the text to pull relevant content
-            query_vec = replicate_embedding(
-                "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
-                {"modality": "text", "text_input": tool_query}
-            )
-            query_vec_serialized = [serialize_f32(query_vec)]
-            similar_tweets_rows = database_select_vec(cur, query_vec_serialized, count)
-        text_content = {
-            "type": "text",
-            "text": f"""
-                <social_media_posts>
-                {str(similar_tweets_rows)}
-                </social_media_posts>
-                
-                <user_query>
-                {user_input_text}
-                </user_query>
-            """,
-        }
-
-        # Encode image to base64
-        image_contents = []
-        for uploaded_file in user_input_files:
-            image = Image.open(uploaded_file)
-            base64_image = encode_image_to_base64(image)
-            image_contents.append({
-                "type": "image_url",
-                "image_url": {
-                    "url":  f"data:image/jpeg;base64,{base64_image}"
-                },
-            })
+        # Process user input
+        user_content = process_user_input(chatinput)
 
         # Save messages to session state
-        st.session_state.messages.append({
-            "role": "user", 
-            "content": [text_content] + image_contents
-        })
+        st.session_state.messages.append(user_content)
+        st.session_state.conversation_manager.save_conversation(
+            st.session_state.messages,
+            st.session_state.current_thread
+        )
+
+        # Display user input
         with st.chat_message("user"):
             for uploaded_file in user_input_files:
                 st.image(uploaded_file)
             st.write(user_input_text)
         
+        # Display assistant response
         with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            with st.spinner('Thinking...'):
-                # TODO: Make anthropic's api work for the image input
-                response = anthropic_chat(
-                    model="claude-3-5-sonnet-20241022",
-                    messages=st.session_state.messages,
-                    system=system_prompt
-                ) if llm_provider == "Anthropic" else openai_chat(
-                    model="gpt-4o-mini",
-                    messages=st.session_state.messages,
-                    system=system_prompt
-                )
-                
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                assistant_response = response
-                full_response = ""
-                for chunk in assistant_response.split(" "):
-                    full_response += chunk + " "
-                    message_placeholder.markdown(full_response + "▌")
-                    time.sleep(0.03)
-                    message_placeholder.markdown(full_response)
+            assistant_response = openrouter_chat(
+                provider=llm_provider,
+                model="anthropic/claude-3.5-sonnet:beta",
+                messages=st.session_state.messages,
+                system=init_sys()
+            )
+            
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": assistant_response
+            })
+            
+            # Emulate streaming response from LLM API
+            stream_text(assistant_response)
 
             # Extracting tweet IDs from a list of tweet IDs and generating link buttons 
-            matches = re.findall(r"\b\d{19}\b", full_response)
-            if matches:
-                columns = st.columns(len(matches), vertical_alignment="bottom")
-                for idx, match in enumerate(matches):
-                    post_data = database_select_tweet_w_id(cur, match)
-                    create_link_buttons(col = columns[idx], data = post_data)
+            generate_link(cur, full_response)
 
 # Define a function for the Scraping page
 def settings_page():
@@ -326,26 +434,23 @@ def settings_page():
         else:
             st.error("Failed to save settings. Please check the error message above.")
 
-# Set the page configuration
-st.set_page_config(
-    page_title="BUILDMODE",
-    page_icon=":material/build:",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'About': "[Github](https://github.com/nikhilnair31/BUILDMODE)"
-    }
-)
-pg = st.navigation([
-    st.Page(
-        chat_page,
-        title = "BUILDMODE",
-        icon = "🤖"
-    ),
-    st.Page(
-        settings_page,
-        title = "SETTINGS",
-        icon = "⚙️"
-    ),
-])
-pg.run()
+def main():
+    # Initialize session state
+    initialize_session_state()
+
+    pg = st.navigation([
+        st.Page(
+            chat_page,
+            title="Chat",
+            icon="🤖"
+        ),
+        st.Page(
+            settings_page,
+            title="Settings",
+            icon="⚙️"
+        ),
+    ])
+    pg.run()
+
+if __name__ == "__main__":
+    main()

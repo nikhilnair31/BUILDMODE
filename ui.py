@@ -49,7 +49,7 @@ def create_link_buttons(col, data):
                     st.link_button(label="", icon=":material/open_in_new:", url=post_url)
             else:
                 formatted_post_text = quote_plus(post_text)
-                google_search_url = f'https://www.google.com/search?q=site:x.com+{formatted_post_text}'
-                st.link_button(label="", icon=":material/open_in_new:", url=google_search_url)
+                search_url = f'https://x.com/search?q={formatted_post_text}'
+                st.link_button(label="", icon=":material/open_in_new:", url=search_url)
     else:
         return
