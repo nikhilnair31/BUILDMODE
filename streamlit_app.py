@@ -32,10 +32,12 @@ from db import (
     database_select_github_user
 )
 from api import (
+    get_system_prompt,
     replicate_embedding, 
     anthropic_chat,
     openai_chat,
-    openai_func_call
+    openai_func_call,
+    openrouter_chat
 )
 from helper import (
     serialize_f32,
@@ -43,6 +45,8 @@ from helper import (
 )
 
 con, cur = database_init()
+github_user_rows = database_select_github_user(cur)
+system_prompt = get_system_prompt(github_user_rows)
 
 class ConversationManager:
     def __init__(self, save_dir="conversations"):
@@ -78,14 +82,19 @@ class ConversationManager:
 
     def create_new_thread(self):
         thread_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.save_conversation([{"role": "assistant", "content": "What do you want to BUILD today?"}], thread_id)
+        self.save_conversation(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "assistant", "content": "What do you want to BUILD today?"}
+            ], 
+            thread_id
+        )
         return thread_id
 
 def initialize_session_state():
     if 'conversation_manager' not in st.session_state:
         st.session_state.conversation_manager = ConversationManager()
     
-    # Initialize or create new conv_thread if none exists
     if 'current_thread' not in st.session_state:
         threads = st.session_state.conversation_manager.list_conversations()
         if threads:
@@ -97,79 +106,6 @@ def initialize_session_state():
         st.session_state.messages = st.session_state.conversation_manager.load_conversation(
             st.session_state.current_thread
         )
-
-def init_sys():
-    base_system = f"""
-        You are BUILDMODE, an advanced ideation and product development assistant specializing in guiding creators through their building journey for digital products such as video games, apps, AI startups, and other digital innovations.
-
-        You will be provided with three main inputs:
-
-        1. Social media posts from the user:
-        <social_media_posts>
-        {{SOCIAL_MEDIA_POSTS}}
-        </social_media_posts>
-
-        2. The user's GitHub profile information:
-        <github_profile>
-        {{GITHUB_PROFILE}}
-        </github_profile>
-
-        3. The user's query:
-        <user_query>
-        {{USER_QUERY}}
-        </user_query>
-
-        Your task is to analyze these inputs and generate creative product ideas tailored to the user's interests and skills. Follow these steps:
-
-        1. Analyze the social media posts:
-        - Identify recurring themes, interests, and patterns in the user's posts
-        - Note the IDs of posts that could inspire product ideas
-
-        2. Examine the GitHub profile:
-        - Determine the user's technical skills and experience based on their repositories and contributions
-        - Identify any specializations or areas of expertise
-
-        3. Ideation process:
-        - Based on the analysis, generate exactly three unique product concepts that align with the user's interests and skills
-        - Ensure each idea is inspired by specific social media posts
-        - Consider the market potential and possible challenges for each concept
-
-        4. Prepare your response in the following format:
-        - Use markdown formatting for better readability
-        - For each of the three ideas, provide:
-            a. A concise title
-            b. A single paragraph describing the concept
-            c. The IDs of the inspiring social media posts
-
-        5. Communication style:
-        - Use relevant examples and case studies where appropriate
-        - Be prepared to ask clarifying questions if needed
-        - Maintain a professional yet encouraging tone
-
-        Your final response should be structured as follows:
-
-        <response>
-        ## Idea {{Number}}: [Title]
-
-        [Single paragraph description]
-
-        Inspired by posts: [List of post IDs]
-
-        [Any clarifying questions, if necessary]
-        </response>
-
-        Remember to tailor your ideas to the user's specific interests and skills as evidenced by their social media posts and GitHub profile. 
-        Be creative, but realistic in your suggestions, always considering the feasibility based on the user's apparent capabilities.
-    """
-    github_user_rows = database_select_github_user(cur)
-    system_prompt = f'''
-        {base_system}
-
-        <github_profile>
-        {str(github_user_rows)}
-        </github_profile>
-    '''
-    return system_prompt
 
 def format_messages(provider, text_content, image_contents):
     if provider == "Anthropic":
@@ -184,7 +120,7 @@ def format_messages(provider, text_content, image_contents):
         
         formatted_text = {
             "type": "text",
-            "text": text_content.text
+            "text": text_content["text"]
         }
         
         return [formatted_text] + formatted_images
@@ -206,11 +142,7 @@ def format_messages(provider, text_content, image_contents):
     
     return user_content
 
-def process_user_input(chatinput):
-    # Pull text and image from user's chat input
-    user_input_text = chatinput.text
-    user_input_files = chatinput.files
-
+def process_user_input(llm_provider, user_input_text, user_input_files):
     # Use function call to check if user's asking for an idea
     similar_tweets_rows = []
     response = openai_func_call(user_input_text)
@@ -241,10 +173,11 @@ def process_user_input(chatinput):
 
     # Encode image to base64
     image_contents_list = []
-    for uploaded_file in user_input_files:
-        image = Image.open(uploaded_file)
-        base64_image = encode_image_to_base64(image)
-        image_contents_list.append(base64_image)
+    if user_input_files:
+        for uploaded_file in user_input_files:
+            image = Image.open(uploaded_file)
+            base64_image = encode_image_to_base64(image)
+            image_contents_list.append(base64_image)
     
     return {
         "role": "user", 
@@ -286,8 +219,11 @@ def chat_page():
         # List existing conversations
         threads = st.session_state.conversation_manager.list_conversations()
         for conv_id, conv_thread in enumerate(threads):
+            # print(f'conv_thread: {conv_thread} | conv_id: {conv_id}')
+            
             # Add date formatting for better readability
             display_date = datetime.strptime(conv_thread, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M")
+            
             col1, col2 = st.columns([4, 1])
             with col1:
                 if st.button(f"Conv: {display_date}", key=conv_thread):
@@ -309,29 +245,37 @@ def chat_page():
                             st.session_state.current_thread = new_thread
                             st.session_state.messages = []
                     st.rerun()
-                    
-    # Loop to display chat
-    for msg in st.session_state.messages:
-        # For system messages do not display the content
-        if msg["role"] == "system":
-            continue
-        
-        # For user messages, extract only the query part
-        if msg["role"] == "user":
-            display_content = msg["content"][0]["text"]
-            display_content = display_content.split("<user_query>")[1]
-            display_content = display_content.replace("</user_query>", "")
-            st.chat_message(msg["role"]).write(display_content)
-        
-        # For user messages, extract only the query part
-        # TODO: Make this work in case the LLM API sends back an image
-        if msg["role"] == "assistant":
-            display_content = msg["content"]
-            st.chat_message(msg["role"]).write(display_content)
+                 
+    # Create a container for the chat messages and Loop to display chat
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.messages:
+            # For system messages do not display the content
+            if msg["role"] == "system":
+                continue
+            
+            # For user messages, extract only the query part
+            if msg["role"] == "user":
+                display_content = msg["content"][0]["text"]
+                display_content = display_content.split("<user_query>")[1]
+                display_content = display_content.replace("</user_query>", "")
+                print(f'user display_content: {display_content}')
+                st.chat_message("user").write(display_content)
+            
+            # For user messages, extract only the query part
+            # TODO: Make this work in case the LLM API sends back an image
+            if msg["role"] == "assistant":
+                display_content = msg["content"]
+                st.chat_message("assistant").write(display_content)
+                generate_link(cur, display_content)
 
     if chatinput := st.chat_input(accept_file=True, file_type=["png"]):
+        # Pull text and image from user's chat input
+        user_input_text = chatinput.text
+        user_input_files = chatinput.files
+
         # Process user input
-        user_content = process_user_input(chatinput)
+        user_content = process_user_input(llm_provider, user_input_text, user_input_files)
 
         # Save messages to session state
         st.session_state.messages.append(user_content)
@@ -341,30 +285,32 @@ def chat_page():
         )
 
         # Display user input
-        with st.chat_message("user"):
-            for uploaded_file in user_input_files:
-                st.image(uploaded_file)
-            st.write(user_input_text)
+        with chat_container:
+            with st.chat_message("user"):
+                if user_input_files:
+                    for uploaded_file in user_input_files:
+                        st.image(uploaded_file)
+                st.write(user_input_text)
         
         # Display assistant response
-        with st.chat_message("assistant"):
-            assistant_response = openrouter_chat(
-                provider=llm_provider,
-                model="anthropic/claude-3.5-sonnet:beta",
-                messages=st.session_state.messages,
-                system=init_sys()
-            )
-            
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": assistant_response
-            })
-            
-            # Emulate streaming response from LLM API
-            stream_text(assistant_response)
+        with chat_container:
+            with st.chat_message("assistant"):
+                assistant_response = openrouter_chat(
+                    provider=llm_provider,
+                    model="anthropic/claude-3.5-sonnet:beta",
+                    messages=st.session_state.messages
+                )
+                
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": assistant_response
+                })
+                
+                # Emulate streaming response from LLM API
+                stream_text(assistant_response)
 
-            # Extracting tweet IDs from a list of tweet IDs and generating link buttons 
-            generate_link(cur, full_response)
+                # Extracting tweet IDs from a list of tweet IDs and generating link buttons 
+                generate_link(cur, assistant_response)
 
 # Define a function for the Scraping page
 def settings_page():
@@ -457,14 +403,13 @@ def settings_page():
             st.error("Failed to save settings. Please check the error message above.")
 
 def main():
-    # Initialize session state
     initialize_session_state()
 
     pg = st.navigation([
         st.Page(
             chat_page,
-            title="Chat",
-            icon="🤖"
+            title="BUILDMODE",
+            icon="⚙️"
         ),
         st.Page(
             settings_page,
